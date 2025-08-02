@@ -1,0 +1,15 @@
+[project]
+name = "claude-code-guardian"
+version = "0.1.0"
+description = "Comprehensive validation framework for Claude Code with advanced security, performance, and policy enforcement"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "cchooks>=0.1.2",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+]
