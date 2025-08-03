@@ -81,3 +81,33 @@ exclude_lines = [
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
 ]
+
+[tool.ruff]
+target-version = "py311"
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist"
+]
+line-length = 98
+
+[tool.ruff.lint]
+select = [
+	"E",  # pycodestyle errors
+	"W",  # pycodestyle warnings
+	"F",  # pyflakes
+	"I",  # isort
+	"B",  # flake8-bugbear
+	"C4", # flake8-comprehensions
+    "PT", # flake8-pytest-style
+	"UP", # pyupgrade
+]
+ignore = [
+	"E501", # line too long, handled by ruff format
+	"B008", # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.pyupgrade]
+# Preserve types, even if a file imports `from __future__ import annotations`.
+keep-runtime-typing = true

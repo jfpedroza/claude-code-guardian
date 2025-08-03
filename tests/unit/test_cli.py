@@ -1,10 +1,11 @@
 """Tests for CLI functionality."""
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import patch, Mock
 from click.testing import CliRunner
 
-from ccguardian.cli import main, hook
+from ccguardian.cli import hook, main
 
 
 class TestCLI:
@@ -63,9 +64,7 @@ class TestHookCommand:
         mock_pretool_context_non_bash.output.exit_success.assert_called_once()
 
     @patch("ccguardian.cli.create_context")
-    def test_hook_empty_command_exits_success(
-        self, mock_create_context, mock_pretool_context
-    ):
+    def test_hook_empty_command_exits_success(self, mock_create_context, mock_pretool_context):
         """Test that empty commands exit successfully."""
         mock_pretool_context.tool_input = {"command": ""}
         mock_create_context.return_value = mock_pretool_context
@@ -76,9 +75,7 @@ class TestHookCommand:
         mock_pretool_context.output.exit_success.assert_called_once()
 
     @patch("ccguardian.cli.create_context")
-    def test_hook_valid_command_exits_success(
-        self, mock_create_context, mock_pretool_context
-    ):
+    def test_hook_valid_command_exits_success(self, mock_create_context, mock_pretool_context):
         """Test that valid commands exit successfully."""
         mock_pretool_context.tool_input = {"command": "ls -la"}
         mock_create_context.return_value = mock_pretool_context
@@ -90,9 +87,7 @@ class TestHookCommand:
         mock_pretool_context.output.deny.assert_not_called()
 
     @patch("ccguardian.cli.create_context")
-    def test_hook_invalid_command_denies(
-        self, mock_create_context, mock_pretool_context
-    ):
+    def test_hook_invalid_command_denies(self, mock_create_context, mock_pretool_context):
         """Test that invalid commands are denied with reason."""
         mock_pretool_context.tool_input = {"command": "grep pattern file.txt"}
         mock_create_context.return_value = mock_pretool_context

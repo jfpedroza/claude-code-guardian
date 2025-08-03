@@ -67,6 +67,18 @@ uv run claude-code-guardian hook --help
 # This command expects to be called from within a Claude Code hook
 ```
 
+### Code Quality
+
+```bash
+# Check lint and formatting issues
+scripts/lint.sh
+
+# Fix formatting issues automatically
+scripts/format.sh
+
+# Note: Always run format.sh after making code changes
+```
+
 **Test Structure:**
 
 - `tests/unit/` - Unit tests

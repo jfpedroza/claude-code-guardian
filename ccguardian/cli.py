@@ -2,9 +2,9 @@
 
 import re
 import sys
-import click
-from cchooks import create_context, PreToolUseContext
 
+import click
+from cchooks import PreToolUseContext, create_context
 
 # Define validation rules as a list of (regex pattern, message) tuples
 _VALIDATION_RULES = [
@@ -55,7 +55,7 @@ def hook():
 
     issues = _validate_command(command)
     if issues:
-        reason = "\n".join(map(lambda message: f"• {message}", issues))
+        reason = "\n".join(f"• {message}" for message in issues)
         c.output.deny(reason)
 
 
