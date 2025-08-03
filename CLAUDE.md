@@ -1,0 +1,70 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**Claude Code Guardian** is a comprehensive validation framework for Claude Code that provides security,
+performance, and policy enforcement. The project validates Claude Code tool usage and provides suggestions for
+better alternatives.
+
+Currently in early development.
+
+## Architecture
+
+### Current State
+
+- **CLI Entry Point**: `claude-code-guardian` command with `hook` subcommand
+- **Package Structure**: `ccguardian/` package with `cli.py` as main module
+- **Hook Integration**: Uses `cchooks>=0.1.2` library for Claude Code hook contexts
+
+## Development Commands
+
+### Package Management
+
+```bash
+# Install dependencies
+uv sync
+
+# Build and install package locally
+uv sync  # Automatically builds due to tool.uv.package = true
+```
+
+### CLI Usage
+
+```bash
+# Show help (exits with code 1 when no args)
+uv run claude-code-guardian
+uv run claude-code-guardian -h
+uv run claude-code-guardian --help
+
+# Execute hook validation (main entry point for Claude Code)
+uv run claude-code-guardian hook
+```
+
+### Testing
+
+```bash
+# Test CLI functionality
+uv run claude-code-guardian  # Should show help and exit code 1
+uv run claude-code-guardian hook --help
+
+# Test validation rules (requires Claude Code hook context)
+# This command expects to be called from within a Claude Code hook
+```
+
+## Configuration
+
+### Project Configuration
+
+- **Package Name**: `claude-code-guardian` (CLI command name)
+- **Python Package**: `ccguardian` (internal package name)
+- **Python Version**: `>=3.11`
+- **Dependencies**: `cchooks>=0.1.2`, `click>=8.0.0`
+
+### Current Validation Rules
+
+Located in `ccguardian/cli.py` as `_VALIDATION_RULES`:
+
+1. **grep optimization**: Suggests `rg` instead of `grep` for better performance
+2. **find optimization**: Suggests `rg --files | rg pattern` instead of `find -name`

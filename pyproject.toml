@@ -1,12 +1,22 @@
 [project]
 name = "claude-code-guardian"
 version = "0.1.0"
-description = "Comprehensive validation framework for Claude Code with advanced security, performance, and policy enforcement"
+description = "Validation rules for tool usage and file access for Claude Code"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
     "cchooks>=0.1.2",
+    "click>=8.0.0",
 ]
+
+[project.scripts]
+claude-code-guardian = "ccguardian.cli:main"
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["ccguardian"]
 
 [dependency-groups]
 dev = [
