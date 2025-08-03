@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(uv sync)",
+      "Bash(uv run pytest:*)",
       "Bash(uv run claude-code-guardian)",
       "Bash(uv run claude-code-guardian -h)",
       "Bash(uv run claude-code-guardian --help)"

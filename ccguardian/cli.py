@@ -30,7 +30,7 @@ def _validate_command(command: str) -> list[str]:
 
 @click.group(invoke_without_command=True)
 @click.pass_context
-@click.help_option('-h', '--help')
+@click.help_option("-h", "--help")
 def main(ctx):
     """Claude Code Guardian - Validation rules for tool usage and file access for Claude Code."""
     if ctx.invoked_subcommand is None:
@@ -46,12 +46,12 @@ def hook():
     assert isinstance(c, PreToolUseContext)
 
     if c.tool_name != "Bash":
-        c.output.exit_success()
+        return c.output.exit_success()
 
     command = c.tool_input.get("command", "")
 
     if not command:
-        c.output.exit_success()
+        return c.output.exit_success()
 
     issues = _validate_command(command)
     if issues:

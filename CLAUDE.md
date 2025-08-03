@@ -45,13 +45,33 @@ uv run claude-code-guardian hook
 ### Testing
 
 ```bash
-# Test CLI functionality
+# Run all tests with coverage
+uv run pytest
+
+# Run tests without coverage  
+uv run pytest --no-cov
+
+# Run specific test files
+uv run pytest tests/unit/test_cli.py
+uv run pytest tests/unit/test_validation_rules.py
+uv run pytest tests/integration/
+
+# Run tests with verbose output
+uv run pytest -v
+
+# Test CLI functionality manually
 uv run claude-code-guardian  # Should show help and exit code 1
 uv run claude-code-guardian hook --help
 
 # Test validation rules (requires Claude Code hook context)
 # This command expects to be called from within a Claude Code hook
 ```
+
+**Test Structure:**
+
+- `tests/unit/` - Unit tests
+- `tests/integration/` - Integration tests
+- `tests/conftest.py` - Shared fixtures and mock contexts
 
 ## Configuration
 
