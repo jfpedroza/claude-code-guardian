@@ -386,7 +386,7 @@ class TestPathAccessRule:
         """Test various glob pattern matching."""
         patterns_and_paths = [
             ("*.env", "/home/user/.env", True),
-            ("*.env", "/home/user/config.yaml", False),
+            ("*.env", "/home/user/config.yml", False),
             ("**/.env*", "/home/user/.env", True),
             ("**/.env*", "/home/user/.env.local", True),
             ("**/.env*", "/deep/nested/path/.env.prod", True),
@@ -438,7 +438,7 @@ class TestPathAccessRule:
                 PathPattern(pattern="*.secret"),
             ],
         )
-        context = pre_use_read_context("/home/user/config.yaml")
+        context = pre_use_read_context("/home/user/config.yml")
 
         result = rule.evaluate(context)
         assert result is None

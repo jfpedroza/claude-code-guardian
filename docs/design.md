@@ -22,13 +22,13 @@ class Rule(ABC):
     priority: int
     action: str
     message: str
-    
+
     @abstractmethod
     def evaluate(self, context) -> RuleResult
 
 class PreUseBashRule(Rule):
     commands: List[CommandPattern]  # Single pattern config converted to list of one
-    
+
 class PathAccessRule(Rule):
     paths: List[PathPattern]  # Single pattern config converted to list of one
     scope: str  # read, write, read_write
@@ -76,7 +76,7 @@ rules:
     message: "Dangerous command detected"
     priority: 10
     enabled: true
-    
+
   security.git_operations:
     type: pre_use_bash
     action: ask
@@ -87,13 +87,13 @@ rules:
         action: allow
         message: "Standard git push allowed"
       - pattern: "git push origin"
-        action: allow 
+        action: allow
         message: "Push to origin allowed"
       - pattern: "git push.*--force"
         action: ask
         message: "Force push requires confirmation"
     enabled: true
-    
+
   performance.suggestions:
     type: pre_use_bash
     pattern: "^grep\\b(?!.*\\|)"
@@ -101,7 +101,7 @@ rules:
     action: suggest
     priority: 10
     enabled: true
-    
+
   security.sensitive_file_access:
     type: path_access
     pattern: "**/*.env*"
@@ -110,7 +110,7 @@ rules:
     message: "Access to environment files blocked"
     priority: 10
     enabled: true
-    
+
   security.more_sensitive_files:
     type: path_access
     action: deny
@@ -163,7 +163,7 @@ rules:
 ##### Overriding Rule Action
 
 ```yaml
-# .claude/guardian/config.local.yml  
+# .claude/guardian/config.local.yml
 rules:
   security.git_operations:
     action: deny  # Change from ask to deny
@@ -187,7 +187,7 @@ rules:
 #### Path Access Patterns (Glob)
 
 - **`**/.env*`**: All .env files recursively
-- **`**/.git/**`**: Entire .git directory structure  
+- **`**/.git/**`**: Entire .git directory structure
 - **`**/config/secrets/**`**: Any secrets directory under config
 - **`/etc/**`**: System configuration (absolute path)
 - **`~/.ssh/**`**: SSH keys and config
@@ -195,7 +195,7 @@ rules:
 #### Action Types
 
 - **`allow`**: Permit operation silently
-- **`suggest`**: Show alternative but allow operation  
+- **`suggest`**: Show alternative but allow operation
 - **`warn`**: Show warning but allow operation
 - **`ask`**: Require user confirmation
 - **`deny`**: Block operation completely
@@ -239,7 +239,7 @@ security.git_operations:
       action: allow
       message: "Standard git push allowed"
     - pattern: "git push origin"
-      action: allow 
+      action: allow
       message: "Push to origin allowed"
     - pattern: "git push.*--force"
       action: ask
@@ -375,8 +375,8 @@ Display configuration diagnostics for troubleshooting and transparency:
 $ claude-code-guardian rules
 
 Configuration Sources:
-✓ Default: /usr/local/lib/python3.11/site-packages/ccguardian/config/default.yaml
-✓ User:    ~/.config/claude-code-guardian/config.yaml
+✓ Default: /usr/local/lib/python3.11/site-packages/ccguardian/config/default.yml
+✓ User:    ~/.config/claude-code-guardian/config.yml
 ✓ Shared:  .claude/guardian/config.yml
 ✓ Local:   .claude/guardian/config.local.yml
 ✗ Environment: CLAUDE_CODE_GUARDIAN_CONFIG (not set)
@@ -389,23 +389,31 @@ Active Rules: 21 (2 disabled)
 
 Rule Evaluation Order (by priority):
 =====================
-Priority | ID                            | Type         | Command/Path                  | Action
----------|-------------------------------|--------------|-------------------------------|--------
-100      | security.git_operations       | pre_use_bash | git push.*--force            | ask
-60       | security.git_operations       | pre_use_bash | git push origin              | allow
-50       | security.git_operations       | pre_use_bash | git push$                    | allow
-20       | local.custom_security         | pre_use_bash | curl.*internal               | deny
-10       | security.sensitive_file_access| path_access  | **/*.env*                    | deny
-10       | security.more_sensitive_files | path_access  | **/.git/**                   | warn
-10       | security.more_sensitive_files | path_access  | **/config/secrets/**         | deny
-10       | performance.suggestions       | pre_use_bash | ^grep\\b(?!.*\\|)            | suggest
+
+ID: security.git_operations | Type: pre_use_bash | Priority: 100
+Commands:
+- `git push.*--force` (action: ask)
+- `git push origin` (action: allow)
+- `git push$` (action: allow)
+
+ID: local.custom_security | Type: pre_use_bash | Priority: 60
+Commands:
+- `curl.*internal` (action: deny)
+
+ID: security.sensitive_file_access | Type: path_access | Priority: 30
+Paths:
+- `**/*.env*` (action: deny)
+- `**/.git/**` (action: warn)
+
+ID: performance.suggestions | Type: pre_use_bash | Priority: 20
+Commands:
+- `^grep\\b(?!.*\\|)` (action: suggest)
 
 Disabled Rules:
 ==============
-ID                          | Type
-----------------------------|-------------
-security.dangerous_command  | pre_use_bash
-development.debug_tools     | path_access
+
+ID: security.dangerous_command | Type: pre_use_bash
+ID: development.debug_tools | Type: path_access
 ```
 
 #### Additional Diagnostic Options
@@ -419,7 +427,7 @@ claude-code-guardian rules --type pre_use_bash
 claude-code-guardian rules --type path_access
 
 # Export merged config to file
-claude-code-guardian rules --export merged-config.yaml
+claude-code-guardian rules --export merged-config.yml
 
 # Validate configuration without showing full output
 claude-code-guardian rules --validate
