@@ -91,7 +91,7 @@ scripts/format.sh
 
 - **Package Name**: `claude-code-guardian` (CLI command name)
 - **Python Package**: `ccguardian` (internal package name)
-- **Python Version**: `>=3.11`
+- **Python Version**: `>=3.12`
 - **Dependencies**: `cchooks>=0.1.2`, `click>=8.0.0`
 
 ### Current Validation Rules
