@@ -1,14 +1,14 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
 name = "cchooks"
-version = "0.1.2"
+version = "0.1.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a9/03/44a42fe30e8dbd69c96d6ebecc48a62227b009002634806f036841f884e6/cchooks-0.1.2.tar.gz", hash = "sha256:a78ec00050fc574a42c7901bed38c6d5bb0da383f8142647e964cd991b8ac5ac", size = 20672, upload-time = "2025-07-27T11:33:30.53Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/cb/b4bece3e18ddebf7627470e64b9240d098c4acf8cd4cee9f48742c9edb53/cchooks-0.1.3.tar.gz", hash = "sha256:fe14a55aadfb2d0c7921760f2fefe2468ae7396768edc617b71d918848388edd", size = 22797, upload-time = "2025-08-03T15:23:56.509Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c0/84/f45bc430d4678286b9a7abaf173a4e8131295fda7e5b413c212261643842/cchooks-0.1.2-py3-none-any.whl", hash = "sha256:acba4dc191abc4d4dc3b16b6d94cbc9aefc495ef692d7e63a73f215fe5bc0ff6", size = 20373, upload-time = "2025-07-27T11:33:29.666Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/fd/55ba58d275c3fee48a85440d93061b72f6f06fad84bd0de62f104b6665a3/cchooks-0.1.3-py3-none-any.whl", hash = "sha256:d7bc76812cd536198dc6137f98f58b9249cc51ac8cb3472886e172167fa53092", size = 22696, upload-time = "2025-08-03T15:23:55.318Z" },
 ]
 
 [[package]]
@@ -36,7 +36,7 @@ test = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cchooks", specifier = ">=0.1.2" },
+    { name = "cchooks", specifier = ">=0.1.2,<0.2" },
     { name = "click", specifier = ">=8.0.0" },
 ]
 

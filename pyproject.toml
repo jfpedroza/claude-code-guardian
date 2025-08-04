@@ -5,7 +5,7 @@ description = "Validation rules for tool usage and file access for Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "cchooks>=0.1.2",
+    "cchooks>=0.1.2,<0.2",
     "click>=8.0.0",
 ]
 
