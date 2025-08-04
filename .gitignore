@@ -12,6 +12,7 @@ coverage.xml
 .venv
 
 .envrc
+.nvim.lua
 tmp/
 
 .claude/settings.local.json

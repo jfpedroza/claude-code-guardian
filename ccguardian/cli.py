@@ -1,31 +1,44 @@
 """Command-line interface for Claude Code Guardian."""
 
-import re
 import sys
 
 import click
 from cchooks import PreToolUseContext, create_context
 
-# Define validation rules as a list of (regex pattern, message) tuples
+from .rules import Action, CommandPattern, Context, PreUseBashRule, RuleResult
+
+# Define validation rules using the new rule classes
 _VALIDATION_RULES = [
-    (
-        r"^grep\b(?!.*\|)",
-        "Use 'rg' (ripgrep) instead of 'grep' for better performance and features",
+    PreUseBashRule(
+        id="performance.grep_suggestion",
+        commands=[
+            CommandPattern(
+                pattern=r"^grep\b(?!.*\|)",
+                action=Action.DENY,
+                message="Use 'rg' (ripgrep) instead of 'grep' for better performance and features",
+            )
+        ],
     ),
-    (
-        r"^find\s+\S+\s+-name\b",
-        "Use 'rg --files | rg pattern' or 'rg --files -g pattern' instead of 'find -name' for better performance",
+    PreUseBashRule(
+        id="performance.find_suggestion",
+        commands=[
+            CommandPattern(
+                pattern=r"^find\s+\S+\s+-name\b",
+                action=Action.DENY,
+                message="Use 'rg --files | rg pattern' or 'rg --files -g pattern' instead of 'find -name' for better performance",
+            )
+        ],
     ),
 ]
 
 
-def _validate_command(command: str) -> list[str]:
-    """Validate a command against the validation rules."""
-    issues = []
-    for pattern, message in _VALIDATION_RULES:
-        if re.search(pattern, command):
-            issues.append(message)
-    return issues
+def _evaluate_rules(context: Context) -> RuleResult | None:
+    """Evaluate all rules against the context and return deny message if any rule denies."""
+    for rule in _VALIDATION_RULES:
+        result = rule.evaluate(context)
+        if result:
+            return result
+    return None
 
 
 @click.group(invoke_without_command=True)
@@ -43,20 +56,14 @@ def hook():
     """Claude Code hook entry point"""
     c = create_context()
 
-    assert isinstance(c, PreToolUseContext)
+    result = _evaluate_rules(c)
 
-    if c.tool_name != "Bash":
-        return c.output.exit_success()
-
-    command = c.tool_input.get("command", "")
-
-    if not command:
-        return c.output.exit_success()
-
-    issues = _validate_command(command)
-    if issues:
-        reason = "\n".join(f"• {message}" for message in issues)
-        c.output.deny(reason)
+    match c:
+        case PreToolUseContext():
+            if result and result.action == Action.DENY:
+                c.output.deny(result.message)
+            else:
+                c.output.exit_success()
 
 
 if __name__ == "__main__":

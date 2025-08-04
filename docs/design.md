@@ -86,15 +86,12 @@ rules:
       - pattern: "git push$"
         action: allow
         message: "Standard git push allowed"
-        priority: 50
       - pattern: "git push origin"
         action: allow 
         message: "Push to origin allowed"
-        priority: 60
       - pattern: "git push.*--force"
         action: ask
         message: "Force push requires confirmation"
-        priority: 100  # Higher priority = more specific
     enabled: true
     
   performance.suggestions:
@@ -150,6 +147,7 @@ rules:
 1. **Higher priority number = more specific = evaluated first**
 2. **Same priority**: Evaluation order is undefined
 3. **Rule evaluation**: First matching rule determines the action
+4. **Pattern evaluation**: Within a rule's `commands` or `paths` list, patterns are evaluated in the order they appear
 
 #### Configuration Examples
 
@@ -210,7 +208,6 @@ rules:
 - **`write`**: Apply to write operations only
 - **`read_write`**: Apply to both read and write operations (default)
 
-
 ## Rule Types and Trigger Conditions
 
 ### Supported Rule Types
@@ -241,15 +238,12 @@ security.git_operations:
     - pattern: "git push$"
       action: allow
       message: "Standard git push allowed"
-      priority: 50
     - pattern: "git push origin"
       action: allow 
       message: "Push to origin allowed"
-      priority: 60
     - pattern: "git push.*--force"
       action: ask
       message: "Force push requires confirmation"
-      priority: 100  # Higher priority = more specific
   enabled: true
 
 performance.suggestions:
@@ -267,9 +261,9 @@ performance.suggestions:
 - `pattern` OR `commands`: Required (mutually exclusive in config)
 - `pattern`: Single regex pattern (converted to `commands` list of one element internally)
 - `commands`: List of command patterns with individual actions and priorities
-- `action`: Default action for rule (required)
-- `message`: Default message (required)
-- `priority`: Rule priority for evaluation order (required)
+- `action`: Default action for rule (default: continue)
+- `message`: Default message (optional)
+- `priority`: Rule priority for evaluation order (optional)
 - `enabled`: Whether rule is active (default: true)
 
 #### `path_access` - File System Access Control
@@ -313,9 +307,9 @@ security.more_sensitive_files:
 - `pattern`: Single glob pattern (converted to `paths` list of one element internally)
 - `paths`: List of path patterns with individual scopes, actions, and messages
 - `scope`: Access scope - `read`, `write`, or `read_write` (default: `read_write`)
-- `action`: Default action for rule (required)
-- `message`: Default message (required)
-- `priority`: Rule priority for evaluation order (required)
+- `action`: Default action for rule (deny)
+- `message`: Default message (optional)
+- `priority`: Rule priority for evaluation order (optional)
 - `enabled`: Whether rule is active (default: true)
 
 ## Data Flow

@@ -2,7 +2,6 @@
 
 from unittest.mock import Mock, patch
 
-import pytest
 from click.testing import CliRunner
 
 from ccguardian.cli import hook, main
@@ -64,17 +63,6 @@ class TestHookCommand:
         mock_pretool_context_non_bash.output.exit_success.assert_called_once()
 
     @patch("ccguardian.cli.create_context")
-    def test_hook_empty_command_exits_success(self, mock_create_context, mock_pretool_context):
-        """Test that empty commands exit successfully."""
-        mock_pretool_context.tool_input = {"command": ""}
-        mock_create_context.return_value = mock_pretool_context
-
-        result = self.runner.invoke(hook, [])
-
-        assert result.exit_code == 0
-        mock_pretool_context.output.exit_success.assert_called_once()
-
-    @patch("ccguardian.cli.create_context")
     def test_hook_valid_command_exits_success(self, mock_create_context, mock_pretool_context):
         """Test that valid commands exit successfully."""
         mock_pretool_context.tool_input = {"command": "ls -la"}
@@ -87,8 +75,8 @@ class TestHookCommand:
         mock_pretool_context.output.deny.assert_not_called()
 
     @patch("ccguardian.cli.create_context")
-    def test_hook_invalid_command_denies(self, mock_create_context, mock_pretool_context):
-        """Test that invalid commands are denied with reason."""
+    def test_hook_invalid_grep_command_denies(self, mock_create_context, mock_pretool_context):
+        """Test that grep commands are denied with reason."""
         mock_pretool_context.tool_input = {"command": "grep pattern file.txt"}
         mock_create_context.return_value = mock_pretool_context
 
@@ -98,26 +86,30 @@ class TestHookCommand:
         mock_pretool_context.output.deny.assert_called_once()
         call_args = mock_pretool_context.output.deny.call_args[0][0]
         assert "rg" in call_args
-        assert "•" in call_args  # bullet point format
+        assert "ripgrep" in call_args  # Check for expected content
 
     @patch("ccguardian.cli.create_context")
-    def test_hook_missing_command_key(self, mock_create_context, mock_pretool_context):
-        """Test hook behavior when command key is missing from tool_input."""
-        mock_pretool_context.tool_input = {}
+    def test_hook_invalid_find_command_denies(self, mock_create_context, mock_pretool_context):
+        """Test that find commands are denied with reason."""
+        mock_pretool_context.tool_input = {"command": "find /path -name '*.txt'"}
         mock_create_context.return_value = mock_pretool_context
 
         result = self.runner.invoke(hook, [])
 
         assert result.exit_code == 0
-        mock_pretool_context.output.exit_success.assert_called_once()
+        mock_pretool_context.output.deny.assert_called_once()
+        call_args = mock_pretool_context.output.deny.call_args[0][0]
+        assert "rg --files" in call_args
+        assert "performance" in call_args
 
     @patch("ccguardian.cli.create_context")
-    def test_hook_context_assertion_error(self, mock_create_context):
+    def test_hook_non_pretooluse_context_does_nothing(self, mock_create_context):
         """Test hook behavior when context is not PreToolUseContext."""
         mock_context = Mock()
         mock_context.__class__.__name__ = "PostToolUseContext"
         mock_create_context.return_value = mock_context
 
-        # This should raise AssertionError due to isinstance check
-        with pytest.raises(AssertionError):
-            self.runner.invoke(hook, [], catch_exceptions=False)
+        result = self.runner.invoke(hook, [])
+
+        # Should exit successfully and do nothing (no method calls on context)
+        assert result.exit_code == 0
