@@ -1,5 +1,6 @@
 """Integration test for full configuration loading and merging pipeline."""
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -7,8 +8,10 @@ from unittest.mock import patch
 import yaml
 
 from ccguardian.config.loader import ConfigurationLoader
+from ccguardian.config.manager import ConfigurationManager
 from ccguardian.config.merger import ConfigurationMerger
 from ccguardian.config.types import SourceType
+from ccguardian.rules import Action, PreUseBashRule
 
 
 class TestConfigurationPipeline:
@@ -230,3 +233,199 @@ class TestConfigurationPipeline:
                 # Merge should work with partial configs
                 merged_config = self.merger.merge_configurations(raw_configs)
                 assert len(merged_config.sources) == 2
+
+
+class TestConfigurationManagerIntegration:
+    """Integration tests for ConfigurationManager end-to-end functionality."""
+
+    def test_load_configuration_with_default_only(self):
+        manager = ConfigurationManager()
+        config = manager.load_configuration()
+
+        # Should have rules from default configuration
+        assert config.total_rules > 0
+        assert config.active_rules > 0
+        assert config.default_rules_enabled is True
+
+        # Should have default source
+        source_types = [source.source_type for source in config.sources]
+        assert SourceType.DEFAULT in source_types
+
+    def test_load_configuration_with_user_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Set up user config directory
+            os.environ["CLAUDE_CODE_GUARDIAN_CONFIG"] = temp_dir
+
+            # Create user config
+            user_config_path = Path(temp_dir) / "config.yml"
+            user_config_path.write_text("""
+default_rules: true
+rules:
+  custom.test_rule:
+    type: pre_use_bash
+    pattern: "test_command"
+    action: warn
+    message: "Custom test rule"
+    priority: 100
+    enabled: true
+""")
+
+            try:
+                manager = ConfigurationManager()
+                config = manager.load_configuration()
+                rule_ids = [rule.id for rule in config.rules]
+                assert "custom.test_rule" in rule_ids
+                custom_rule = next(rule for rule in config.rules if rule.id == "custom.test_rule")
+                assert isinstance(custom_rule, PreUseBashRule)
+                assert custom_rule.action == Action.WARN
+                assert custom_rule.priority == 100
+
+            finally:
+                # Clean up environment
+                del os.environ["CLAUDE_CODE_GUARDIAN_CONFIG"]
+
+    def test_load_configuration_with_project_configs(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Set up project directory
+            os.environ["CLAUDE_PROJECT_DIR"] = temp_dir
+
+            # Create .claude/guardian directory
+            guardian_dir = Path(temp_dir) / ".claude" / "guardian"
+            guardian_dir.mkdir(parents=True)
+
+            # Create shared config
+            shared_config = guardian_dir / "config.yml"
+            shared_config.write_text("""
+default_rules: true
+rules:
+  project.shared_rule:
+    type: pre_use_bash
+    pattern: "shared_command"
+    action: ask
+    message: "Shared project rule"
+    priority: 80
+    enabled: true
+""")
+
+            # Create local config that overrides the shared rule
+            local_config = guardian_dir / "config.local.yml"
+            local_config.write_text("""
+rules:
+  project.shared_rule:
+    action: deny
+    message: "Overridden in local config"
+  project.local_rule:
+    type: pre_use_bash
+    pattern: "local_command"
+    action: allow
+    message: "Local-only rule"
+    priority: 90
+    enabled: true
+""")
+
+            try:
+                manager = ConfigurationManager()
+                config = manager.load_configuration()
+                rule_ids = [rule.id for rule in config.rules]
+                assert "project.shared_rule" in rule_ids
+                assert "project.local_rule" in rule_ids
+
+                # Shared rule should be overridden by local config
+                shared_rule = next(
+                    rule for rule in config.rules if rule.id == "project.shared_rule"
+                )
+                assert shared_rule.action == Action.DENY
+                assert shared_rule.message == "Overridden in local config"
+                local_rule = next(
+                    rule for rule in config.rules if rule.id == "project.local_rule"
+                )
+                assert local_rule.action == Action.ALLOW
+                assert local_rule.priority == 90
+
+            finally:
+                # Clean up environment
+                del os.environ["CLAUDE_PROJECT_DIR"]
+
+    def test_disabled_rules_included_in_configuration(self):
+        """Test that disabled rules are included in configuration but marked as disabled."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.environ["CLAUDE_CODE_GUARDIAN_CONFIG"] = temp_dir
+
+            # Create config with disabled rule
+            user_config_path = Path(temp_dir) / "config.yml"
+            user_config_path.write_text("""
+default_rules: true
+rules:
+  disabled.rule:
+    type: pre_use_bash
+    pattern: "disabled_command"
+    action: deny
+    message: "This rule is disabled"
+    priority: 60
+    enabled: false
+""")
+
+            try:
+                manager = ConfigurationManager()
+                config = manager.load_configuration()
+                rule_ids = [rule.id for rule in config.rules]
+                assert "disabled.rule" in rule_ids
+                disabled_rule = next(rule for rule in config.rules if rule.id == "disabled.rule")
+                assert not disabled_rule.enabled
+
+            finally:
+                del os.environ["CLAUDE_CODE_GUARDIAN_CONFIG"]
+
+    def test_configuration_merging_hierarchy(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Set up all configuration levels
+            os.environ["CLAUDE_CODE_GUARDIAN_CONFIG"] = temp_dir
+            os.environ["CLAUDE_PROJECT_DIR"] = temp_dir
+
+            # Create user config
+            user_config_path = Path(temp_dir) / "config.yml"
+            user_config_path.write_text("""
+default_rules: true
+rules:
+  hierarchy.test:
+    type: pre_use_bash
+    pattern: "test"
+    action: warn
+    message: "User level"
+    priority: 50
+    enabled: true
+""")
+
+            # Create project configs
+            guardian_dir = Path(temp_dir) / ".claude" / "guardian"
+            guardian_dir.mkdir(parents=True)
+
+            shared_config = guardian_dir / "config.yml"
+            shared_config.write_text("""
+rules:
+  hierarchy.test:
+    action: ask
+    message: "Shared level"
+""")
+
+            local_config = guardian_dir / "config.local.yml"
+            local_config.write_text("""
+rules:
+  hierarchy.test:
+    action: deny
+    message: "Local level - highest priority"
+""")
+
+            try:
+                manager = ConfigurationManager()
+                config = manager.load_configuration()
+                test_rule = next(rule for rule in config.rules if rule.id == "hierarchy.test")
+                assert test_rule.action == Action.DENY
+                assert test_rule.message == "Local level - highest priority"
+                assert test_rule.priority == 50
+
+            finally:
+                if "CLAUDE_CODE_GUARDIAN_CONFIG" in os.environ:
+                    del os.environ["CLAUDE_CODE_GUARDIAN_CONFIG"]
+                if "CLAUDE_PROJECT_DIR" in os.environ:
+                    del os.environ["CLAUDE_PROJECT_DIR"]
