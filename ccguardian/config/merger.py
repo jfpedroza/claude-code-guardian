@@ -4,6 +4,7 @@ import fnmatch
 import logging
 from typing import Any
 
+from .factory import RuleFactory
 from .types import Configuration, RawConfiguration
 
 logger = logging.getLogger(__name__)
@@ -11,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 class ConfigurationMerger:
     """Merges multiple configuration sources into a single configuration."""
+
+    def __init__(self):
+        """Initialize the merger with a rule factory."""
+        self.rule_factory = RuleFactory()
 
     def merge_configurations(self, raw_configs: list[RawConfiguration]) -> Configuration:
         """
@@ -39,14 +44,16 @@ class ConfigurationMerger:
             merged_data.get("default_rules", True)
         )
 
-        # Merge rules by ID (not used yet, but demonstrates the pipeline)
-        self._merge_rules_by_id(raw_configs, default_rules_enabled, default_rules_patterns)
+        merged_rules_data = self._merge_rules_by_id(
+            raw_configs, default_rules_enabled, default_rules_patterns
+        )
+        rules = self.rule_factory.create_rules_from_merged_data(merged_rules_data)
 
         return Configuration(
             sources=sources,
             default_rules_enabled=default_rules_enabled,
             default_rules_patterns=default_rules_patterns,
-            rules=[],  # Will be populated by RuleFactory in later phase
+            rules=rules,
         )
 
     def _merge_config_data(self, target: dict[str, Any], source: dict[str, Any]) -> None:

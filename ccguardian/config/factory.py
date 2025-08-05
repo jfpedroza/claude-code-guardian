@@ -1,0 +1,329 @@
+"""Rule factory for converting YAML configuration to Python rule objects."""
+
+import fnmatch
+import logging
+import re
+from typing import Any
+
+from ..rules import (
+    DEFAULT_PRIORITY,
+    Action,
+    CommandPattern,
+    PathAccessRule,
+    PathPattern,
+    PreUseBashRule,
+    Rule,
+    Scope,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class RuleFactory:
+    """Factory for creating Rule objects from configuration data."""
+
+    def __init__(self):
+        """Initialize the rule factory with type registration."""
+        self._rule_types: dict[str, type[Rule]] = {
+            "pre_use_bash": PreUseBashRule,
+            "path_access": PathAccessRule,
+        }
+
+    def create_rule(self, rule_id: str, rule_config: dict[str, Any]) -> Rule | None:
+        """
+        Create a Rule object from configuration data.
+
+        Args:
+            rule_id: Unique identifier for the rule
+            rule_config: Dictionary containing rule configuration
+
+        Returns:
+            Rule object or None if creation failed
+        """
+        try:
+            rule_type = rule_config.get("type")
+            if not rule_type:
+                logger.error(f"Rule '{rule_id}' is missing required 'type' field")
+                return None
+
+            if rule_type not in self._rule_types:
+                logger.error(f"Unknown rule type '{rule_type}' for rule '{rule_id}'")
+                return None
+
+            # Convert configuration to rule object based on type
+            if rule_type == "pre_use_bash":
+                return self._create_pre_use_bash_rule(rule_id, rule_config)
+            elif rule_type == "path_access":
+                return self._create_path_access_rule(rule_id, rule_config)
+            else:
+                logger.error(f"Unhandled rule type '{rule_type}' for rule '{rule_id}'")
+                return None
+
+        except Exception as e:
+            logger.error(f"Failed to create rule '{rule_id}': {e}")
+            return None
+
+    def _create_pre_use_bash_rule(
+        self, rule_id: str, config: dict[str, Any]
+    ) -> PreUseBashRule | None:
+        """Create a PreUseBashRule from configuration."""
+        try:
+            commands = self._convert_to_command_patterns(config)
+            if not commands:
+                logger.error(f"PreUseBashRule '{rule_id}' has no valid command patterns")
+                return None
+
+            enabled = config.get("enabled", True)
+            priority = config.get("priority", DEFAULT_PRIORITY)
+            action = self._parse_action(config.get("action", "continue"))
+            message = config.get("message")
+
+            return PreUseBashRule(
+                id=rule_id,
+                commands=commands,
+                enabled=enabled,
+                priority=priority,
+                action=action,
+                message=message,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create PreUseBashRule '{rule_id}': {e}")
+            return None
+
+    def _create_path_access_rule(
+        self, rule_id: str, config: dict[str, Any]
+    ) -> PathAccessRule | None:
+        """Create a PathAccessRule from configuration."""
+        try:
+            paths = self._convert_to_path_patterns(config)
+            if not paths:
+                logger.error(f"PathAccessRule '{rule_id}' has no valid path patterns")
+                return None
+
+            enabled = config.get("enabled", True)
+            priority = config.get("priority", DEFAULT_PRIORITY)
+            action = self._parse_action(config.get("action", "deny"))
+            message = config.get("message")
+            scope = self._parse_scope(config.get("scope", "read_write"))
+
+            return PathAccessRule(
+                id=rule_id,
+                paths=paths,
+                enabled=enabled,
+                priority=priority,
+                action=action,
+                message=message,
+                scope=scope,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create PathAccessRule '{rule_id}': {e}")
+            return None
+
+    def _convert_to_command_patterns(self, config: dict[str, Any]) -> list[CommandPattern]:
+        """
+        Convert configuration to list of CommandPattern objects.
+
+        Handles both single pattern and commands list formats:
+        - pattern: "regex" -> [CommandPattern(pattern="regex")]
+        - commands: [{pattern: "regex", action: "deny"}, ...]
+        """
+        patterns = []
+
+        # Check for single pattern format
+        if "pattern" in config:
+            pattern_str = config["pattern"]
+            if not self._validate_regex_pattern(pattern_str):
+                logger.error(f"Invalid regex pattern in command: '{pattern_str}'")
+                return []
+            patterns.append(CommandPattern(pattern=pattern_str, action=None, message=None))
+
+        elif "commands" in config:
+            commands_list = config["commands"]
+            if not isinstance(commands_list, list):
+                logger.warning("'commands' field must be a list")
+                return patterns
+
+            for cmd_config in commands_list:
+                if not isinstance(cmd_config, dict):
+                    logger.warning("Command configuration must be a dictionary")
+                    continue
+
+                pattern_str = cmd_config.get("pattern")
+                if not pattern_str:
+                    logger.warning("Command pattern missing 'pattern' field")
+                    continue
+
+                if not self._validate_regex_pattern(pattern_str):
+                    logger.error(f"Invalid regex pattern in command: '{pattern_str}'")
+                    continue
+
+                action = (
+                    self._parse_action(cmd_config.get("action"))
+                    if "action" in cmd_config
+                    else None
+                )
+                message = cmd_config.get("message")
+
+                patterns.append(
+                    CommandPattern(pattern=pattern_str, action=action, message=message)
+                )
+
+        return patterns
+
+    def _convert_to_path_patterns(self, config: dict[str, Any]) -> list[PathPattern]:
+        """
+        Convert configuration to list of PathPattern objects.
+
+        Handles both single pattern and paths list formats:
+        - pattern: "*.env" -> [PathPattern(pattern="*.env")]
+        - paths: [{pattern: "*.env", scope: "read", action: "deny"}, ...]
+        """
+        patterns = []
+
+        # Check for single pattern format
+        if "pattern" in config:
+            pattern_str = config["pattern"]
+            if not self._validate_glob_pattern(pattern_str):
+                logger.error(f"Invalid glob pattern in path: '{pattern_str}'")
+                return []
+            patterns.append(
+                PathPattern(pattern=pattern_str, scope=None, action=None, message=None)
+            )
+
+        elif "paths" in config:
+            paths_list = config["paths"]
+            if not isinstance(paths_list, list):
+                logger.warning("'paths' field must be a list")
+                return patterns
+
+            for path_config in paths_list:
+                if not isinstance(path_config, dict):
+                    logger.warning("Path configuration must be a dictionary")
+                    continue
+
+                pattern_str = path_config.get("pattern")
+                if not pattern_str:
+                    logger.warning("Path pattern missing 'pattern' field")
+                    continue
+
+                if not self._validate_glob_pattern(pattern_str):
+                    logger.error(f"Invalid glob pattern in path: '{pattern_str}'")
+                    continue
+
+                scope = (
+                    self._parse_scope(path_config.get("scope"))
+                    if "scope" in path_config
+                    else None
+                )
+                action = (
+                    self._parse_action(path_config.get("action"))
+                    if "action" in path_config
+                    else None
+                )
+                message = path_config.get("message")
+
+                patterns.append(
+                    PathPattern(pattern=pattern_str, scope=scope, action=action, message=message)
+                )
+
+        return patterns
+
+    def _parse_action(self, action_value: Any) -> Action | None:
+        """Parse action string to Action enum."""
+        if action_value is None:
+            return None
+
+        if isinstance(action_value, Action):
+            return action_value
+
+        if isinstance(action_value, str):
+            try:
+                return Action(action_value.lower())
+            except ValueError:
+                logger.warning(
+                    f"Invalid action value: '{action_value}', valid options: {[a.value for a in Action]}"
+                )
+                return None
+
+        logger.warning(f"Action must be a string, got {type(action_value)}")
+        return None
+
+    def _parse_scope(self, scope_value: Any) -> Scope | None:
+        """Parse scope string to Scope enum."""
+        if scope_value is None:
+            return None
+
+        if isinstance(scope_value, Scope):
+            return scope_value
+
+        if isinstance(scope_value, str):
+            try:
+                return Scope(scope_value.lower())
+            except ValueError:
+                logger.warning(
+                    f"Invalid scope value: '{scope_value}', valid options: {[s.value for s in Scope]}"
+                )
+                return None
+
+        logger.warning(f"Scope must be a string, got {type(scope_value)}")
+        return None
+
+    def create_rules_from_merged_data(
+        self, merged_rules_data: dict[str, dict[str, Any]]
+    ) -> list[Rule]:
+        """
+        Create a list of Rule objects from merged configuration data.
+
+        Args:
+            merged_rules_data: Dictionary mapping rule ID to rule configuration
+
+        Returns:
+            List of successfully created Rule objects, sorted by priority (descending)
+        """
+        rules = []
+
+        for rule_id, rule_config in merged_rules_data.items():
+            rule = self.create_rule(rule_id, rule_config)
+            if rule is not None:
+                rules.append(rule)
+
+        rules.sort(key=lambda r: (-r.priority, r.id))
+
+        return rules
+
+    def _validate_regex_pattern(self, pattern: str) -> bool:
+        """
+        Validate that a string is a valid regular expression.
+
+        Args:
+            pattern: The regex pattern to validate
+
+        Returns:
+            True if pattern is a valid regex, False otherwise
+        """
+        try:
+            re.compile(pattern)
+            return True
+        except re.error:
+            return False
+
+    def _validate_glob_pattern(self, pattern: str) -> bool:
+        """
+        Validate that a string is a valid glob pattern.
+
+        Args:
+            pattern: The glob pattern to validate
+
+        Returns:
+            True if pattern is a valid glob pattern, False otherwise
+        """
+        try:
+            # Test the pattern by trying to match against a dummy path
+            # If fnmatch.fnmatch doesn't raise an exception, the pattern is valid
+            fnmatch.fnmatch("test/path.txt", pattern)
+            return True
+        except Exception:
+            # fnmatch is generally very forgiving, but catch any potential issues
+            return False
