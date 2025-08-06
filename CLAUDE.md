@@ -63,8 +63,8 @@ uv run pytest -v
 uv run claude-code-guardian  # Should show help and exit code 1
 uv run claude-code-guardian hook --help
 
-# Test validation rules (requires Claude Code hook context)
-# This command expects to be called from within a Claude Code hook
+# Test CLI as if installed with a built package
+uvx --no-cache --from /path/to/claude-code-guardian claude-code-guardian <args>
 ```
 
 ### Code Quality
@@ -75,9 +75,9 @@ scripts/lint.sh
 
 # Fix formatting issues automatically
 scripts/format.sh
-
-# Note: Always run format.sh after making code changes
 ```
+
+**IMPORTANT**: Always run format.sh after making code changes
 
 **Test Structure:**
 

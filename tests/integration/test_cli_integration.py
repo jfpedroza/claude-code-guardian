@@ -10,7 +10,6 @@ class TestCLIIntegration:
     """Test real CLI integration via subprocess."""
 
     def test_cli_no_args_exit_code(self):
-        """Test that CLI exits with code 1 when no arguments provided."""
         result = subprocess.run(
             [sys.executable, "-m", "ccguardian.cli"],
             capture_output=True,
@@ -19,6 +18,8 @@ class TestCLIIntegration:
 
         assert result.returncode == 1
         assert "Claude Code Guardian" in result.stdout
+        assert "hook" in result.stdout
+        assert "rules" in result.stdout
 
 
 class TestHookCommandIntegration:
@@ -70,3 +71,29 @@ class TestHookCommandIntegration:
         # Should not output denial messages
         assert "rg" not in result.stderr
         assert "rg" not in result.stdout
+
+
+class TestRulesCommandIntegration:
+    """Integration tests for the rules command via subprocess."""
+
+    def test_rules_command_via_subprocess(self):
+        result = subprocess.run(
+            [sys.executable, "-m", "ccguardian.cli", "rules"],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+
+        assert "Configuration Sources:" in result.stdout
+        assert "Merged Configuration:" in result.stdout
+        assert "Rule Evaluation Order" in result.stdout
+        assert "Default Rules: enabled" in result.stdout
+
+        assert "performance.grep_suggestion" in result.stdout
+        assert "performance.find_suggestion" in result.stdout
+
+        assert "Type: pre_use_bash" in result.stdout
+        assert "Priority: 50" in result.stdout
+        assert "Commands:" in result.stdout
+        assert "action: deny" in result.stdout

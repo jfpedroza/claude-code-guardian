@@ -17,7 +17,10 @@ claude-code-guardian = "ccguardian.cli:main"
 package = true
 
 [tool.setuptools.packages.find]
-include = ["ccguardian"]
+include = ["ccguardian*"]
+
+[tool.setuptools.package-data]
+ccguardian = ["config/*.yml"]
 
 [dependency-groups]
 dev = [

@@ -1,11 +1,12 @@
-"""Command-line interface for Claude Code Guardian."""
+"""Main CLI entry point for Claude Code Guardian."""
 
 import sys
 
 import click
 from cchooks import PreToolUseContext, create_context
 
-from .rules import Action, CommandPattern, Context, PreUseBashRule, RuleResult
+from ..rules import Action, CommandPattern, Context, PreUseBashRule, RuleResult
+from .rules_command import rules as rules_command
 
 # Define validation rules using the new rule classes
 _VALIDATION_RULES = [
@@ -66,5 +67,5 @@ def hook():
                 c.output.exit_success()
 
 
-if __name__ == "__main__":
-    main()
+# Add the rules command to the main CLI group
+main.add_command(rules_command)
