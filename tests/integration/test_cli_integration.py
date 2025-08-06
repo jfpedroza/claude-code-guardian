@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -45,8 +46,8 @@ class TestHookCommandIntegration:
 
         # Hook should complete successfully (exit code 0)
         assert result.returncode == 0
-        # Should output denial message to stderr (hook context output)
-        assert "rg" in result.stderr or "rg" in result.stdout
+        assert "rg" in result.stdout
+        assert result.stderr == ""
 
     def test_hook_command_via_subprocess_safe_command(self):
         """Test hook command via subprocess with safe command that passes."""
@@ -66,11 +67,68 @@ class TestHookCommandIntegration:
             text=True,
         )
 
-        # Hook should complete successfully
         assert result.returncode == 0
         # Should not output denial messages
-        assert "rg" not in result.stderr
         assert "rg" not in result.stdout
+        assert result.stderr == ""
+
+    def test_hook_command_with_custom_configuration(self):
+        custom_config = """
+default_rules: false
+
+rules:
+  test.custom_rule:
+    type: pre_use_bash
+    pattern: "^echo.*test"
+    action: deny
+    message: "Custom test rule triggered"
+    priority: 10
+    enabled: true
+"""
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_dir = Path(tmpdir) / ".claude" / "guardian"
+            config_dir.mkdir(parents=True)
+
+            config_file = config_dir / "config.yml"
+            config_file.write_text(custom_config)
+
+            hook_input = {
+                "session_id": "test123",
+                "transcript_path": "/tmp/test.jsonl",
+                "cwd": tmpdir,
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "echo something test"},
+            }
+
+            result = subprocess.run(
+                [sys.executable, "-m", "ccguardian.cli", "hook"],
+                input=json.dumps(hook_input),
+                capture_output=True,
+                text=True,
+                cwd=tmpdir,
+            )
+
+            assert result.returncode == 0
+            assert "Custom test rule triggered" in result.stdout
+            assert result.stderr == ""
+
+            # Test hook with command that doesn't match (should pass)
+            hook_input["tool_input"]["command"] = "ls -la"
+
+            result = subprocess.run(
+                [sys.executable, "-m", "ccguardian.cli", "hook"],
+                input=json.dumps(hook_input),
+                capture_output=True,
+                text=True,
+                cwd=tmpdir,
+            )
+
+            assert result.returncode == 0
+            assert "Custom test rule triggered" not in result.stdout
+            assert "rg" not in result.stdout
+            assert result.stderr == ""
 
 
 class TestRulesCommandIntegration:

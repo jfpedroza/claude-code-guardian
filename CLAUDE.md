@@ -100,3 +100,7 @@ Located in `ccguardian/cli.py` as `_VALIDATION_RULES`:
 
 1. **grep optimization**: Suggests `rg` instead of `grep` for better performance
 2. **find optimization**: Suggests `rg --files | rg pattern` instead of `find -name`
+
+## Code Style Guidelines
+
+- Do not add superflous comments

@@ -5,8 +5,10 @@ from unittest.mock import Mock, patch
 from click.testing import CliRunner
 
 from ccguardian.cli import main
-from ccguardian.cli.main import hook
+from ccguardian.cli.hook_command import hook
 from ccguardian.cli.rules_command import rules
+from ccguardian.rules import Action, CommandPattern, PreUseBashRule
+from tests.utils import post_use_write_context, pre_use_bash_context
 
 
 class TestCLI:
@@ -51,12 +53,16 @@ class TestHookCommand:
         assert result.exit_code == 0
         assert "Claude Code hook entry point" in result.output
 
-    @patch("ccguardian.cli.main.create_context")
+    @patch("ccguardian.cli.hook_command.ConfigurationManager")
+    @patch("ccguardian.cli.hook_command.safe_create_context")
     def test_hook_non_bash_tool_exits_success(
-        self, mock_create_context, mock_pretool_context_non_bash
+        self, mock_safe_create_context, mock_config_manager, mock_pretool_context_non_bash
     ):
-        """Test that non-Bash tools exit successfully without validation."""
-        mock_create_context.return_value = mock_pretool_context_non_bash
+        mock_safe_create_context.return_value = mock_pretool_context_non_bash
+
+        mock_config = Mock()
+        mock_config.rules = []
+        mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
 
@@ -64,57 +70,119 @@ class TestHookCommand:
         assert result.exit_code == 0
         mock_pretool_context_non_bash.output.exit_success.assert_called_once()
 
-    @patch("ccguardian.cli.main.create_context")
-    def test_hook_valid_command_exits_success(self, mock_create_context, mock_pretool_context):
-        """Test that valid commands exit successfully."""
-        mock_pretool_context.tool_input = {"command": "ls -la"}
-        mock_create_context.return_value = mock_pretool_context
+    @patch("ccguardian.cli.hook_command.ConfigurationManager")
+    @patch("ccguardian.cli.hook_command.safe_create_context")
+    def test_hook_no_matching_rules_exits_success(
+        self, mock_safe_create_context, mock_config_manager
+    ):
+        context = pre_use_bash_context("ls -la")
+        mock_safe_create_context.return_value = context
+
+        mock_config = Mock()
+        mock_config.rules = []
+        mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
 
         assert result.exit_code == 0
-        # Should not call deny, command should pass through
-        mock_pretool_context.output.deny.assert_not_called()
+        context.output.deny.assert_not_called()
+        context.output.exit_success.assert_called_once()
 
-    @patch("ccguardian.cli.main.create_context")
-    def test_hook_invalid_grep_command_denies(self, mock_create_context, mock_pretool_context):
-        """Test that grep commands are denied with reason."""
-        mock_pretool_context.tool_input = {"command": "grep pattern file.txt"}
-        mock_create_context.return_value = mock_pretool_context
+    @patch("ccguardian.cli.hook_command.ConfigurationManager")
+    @patch("ccguardian.cli.hook_command.safe_create_context")
+    def test_hook_valid_command_with_rules_exits_success(
+        self, mock_safe_create_context, mock_config_manager
+    ):
+        context = pre_use_bash_context("ls -la")
+        mock_safe_create_context.return_value = context
+
+        grep_rule = PreUseBashRule(
+            id="performance.grep_suggestion",
+            enabled=True,
+            priority=50,
+            commands=[
+                CommandPattern(
+                    pattern=r"^grep\b(?!.*\|)",
+                    action=Action.DENY,
+                    message="Use 'rg' instead",
+                )
+            ],
+        )
+        mock_config = Mock()
+        mock_config.rules = [grep_rule]
+        mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
 
         assert result.exit_code == 0
-        mock_pretool_context.output.deny.assert_called_once()
-        call_args = mock_pretool_context.output.deny.call_args[0][0]
-        assert "rg" in call_args
-        assert "ripgrep" in call_args  # Check for expected content
+        context.output.deny.assert_not_called()
+        context.output.exit_success.assert_called_once()
 
-    @patch("ccguardian.cli.main.create_context")
-    def test_hook_invalid_find_command_denies(self, mock_create_context, mock_pretool_context):
-        """Test that find commands are denied with reason."""
-        mock_pretool_context.tool_input = {"command": "find /path -name '*.txt'"}
-        mock_create_context.return_value = mock_pretool_context
+    @patch("ccguardian.cli.hook_command.ConfigurationManager")
+    @patch("ccguardian.cli.hook_command.safe_create_context")
+    def test_hook_command_matching_deny_rule(self, mock_safe_create_context, mock_config_manager):
+        context = pre_use_bash_context("test_command arg")
+        mock_safe_create_context.return_value = context
+
+        test_rule = PreUseBashRule(
+            id="test.deny_rule",
+            enabled=True,
+            priority=50,
+            commands=[
+                CommandPattern(
+                    pattern=r"^test_command\b",
+                    action=Action.DENY,
+                    message="Custom denial message for testing",
+                )
+            ],
+        )
+        mock_config = Mock()
+        mock_config.rules = [test_rule]
+        mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
 
         assert result.exit_code == 0
-        mock_pretool_context.output.deny.assert_called_once()
-        call_args = mock_pretool_context.output.deny.call_args[0][0]
-        assert "rg --files" in call_args
-        assert "performance" in call_args
+        context.output.deny.assert_called_once()
+        call_args = context.output.deny.call_args[0][0]
+        assert "Custom denial message for testing" in call_args
 
-    @patch("ccguardian.cli.main.create_context")
-    def test_hook_non_pretooluse_context_does_nothing(self, mock_create_context):
-        """Test hook behavior when context is not PreToolUseContext."""
-        mock_context = Mock()
-        mock_context.__class__.__name__ = "PostToolUseContext"
-        mock_create_context.return_value = mock_context
+    @patch("ccguardian.cli.hook_command.exit_success")
+    @patch("ccguardian.cli.hook_command.ConfigurationManager")
+    @patch("ccguardian.cli.hook_command.safe_create_context")
+    def test_hook_non_pretooluse_context_does_nothing(
+        self, mock_safe_create_context, mock_config_manager, mock_exit_success
+    ):
+        post_tool_context = post_use_write_context("/tmp/test.txt", "test content")
+        mock_safe_create_context.return_value = post_tool_context
+
+        mock_config = Mock()
+        mock_config.rules = []
+        mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
 
-        # Should exit successfully and do nothing (no method calls on context)
         assert result.exit_code == 0
+        mock_exit_success.assert_called_once()
+
+    @patch("ccguardian.cli.hook_command.exit_non_block")
+    @patch("ccguardian.cli.hook_command.ConfigurationManager")
+    @patch("ccguardian.cli.hook_command.safe_create_context")
+    def test_hook_exception_handling(
+        self, mock_safe_create_context, mock_config_manager, mock_exit_non_block
+    ):
+        test_context = pre_use_bash_context("test command")
+        mock_safe_create_context.return_value = test_context
+
+        mock_config_manager.side_effect = Exception("Configuration loading failed")
+
+        result = self.runner.invoke(hook, [])
+
+        assert result.exit_code == 0
+        mock_exit_non_block.assert_called_once()
+        call_args = mock_exit_non_block.call_args[0][0]
+        assert "Claude Code Guardian hook failed:" in call_args
+        assert "Configuration loading failed" in call_args
 
 
 class TestRulesCommand:

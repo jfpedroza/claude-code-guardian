@@ -2,7 +2,17 @@
 
 from unittest.mock import Mock
 
-from cchooks import PreToolUseContext
+from cchooks import PostToolUseContext, PreToolUseContext
+
+
+def pre_use_context(tool_name: str, **tool_input) -> Mock:
+    context = Mock(spec=PreToolUseContext)
+    context.tool_name = tool_name
+    context.tool_input = tool_input
+    context.output = Mock()
+    context.output.exit_success = Mock()
+    context.output.deny = Mock()
+    return context
 
 
 def pre_use_bash_context(command: str) -> Mock:
@@ -16,16 +26,24 @@ def pre_use_read_context(file_path: str) -> Mock:
 
 
 def pre_use_write_context(file_path: str, tool_name: str = "Write") -> Mock:
-    """Create a mock PreToolUseContext for write tools with given file path."""
     return pre_use_context(tool_name, file_path=file_path)
 
 
-def pre_use_context(tool_name: str, **tool_input) -> Mock:
-    """Create a mock PreToolUseContext with given tool name and input."""
-    context = Mock(spec=PreToolUseContext)
+def post_use_context(tool_name: str, tool_input: dict, tool_response: dict) -> Mock:
+    context = Mock(spec=PostToolUseContext)
     context.tool_name = tool_name
     context.tool_input = tool_input
+    context.tool_response = tool_response
     context.output = Mock()
     context.output.exit_success = Mock()
-    context.output.deny = Mock()
     return context
+
+
+def post_use_write_context(
+    file_path: str, content: str = "file content", success: bool = True
+) -> Mock:
+    return post_use_context(
+        "Write",
+        tool_input={"file_path": file_path, "content": content},
+        tool_response={"filePath": file_path, "success": success},
+    )

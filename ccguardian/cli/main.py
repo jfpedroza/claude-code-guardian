@@ -3,43 +3,9 @@
 import sys
 
 import click
-from cchooks import PreToolUseContext, create_context
 
-from ..rules import Action, CommandPattern, Context, PreUseBashRule, RuleResult
-from .rules_command import rules as rules_command
-
-# Define validation rules using the new rule classes
-_VALIDATION_RULES = [
-    PreUseBashRule(
-        id="performance.grep_suggestion",
-        commands=[
-            CommandPattern(
-                pattern=r"^grep\b(?!.*\|)",
-                action=Action.DENY,
-                message="Use 'rg' (ripgrep) instead of 'grep' for better performance and features",
-            )
-        ],
-    ),
-    PreUseBashRule(
-        id="performance.find_suggestion",
-        commands=[
-            CommandPattern(
-                pattern=r"^find\s+\S+\s+-name\b",
-                action=Action.DENY,
-                message="Use 'rg --files | rg pattern' or 'rg --files -g pattern' instead of 'find -name' for better performance",
-            )
-        ],
-    ),
-]
-
-
-def _evaluate_rules(context: Context) -> RuleResult | None:
-    """Evaluate all rules against the context and return deny message if any rule denies."""
-    for rule in _VALIDATION_RULES:
-        result = rule.evaluate(context)
-        if result:
-            return result
-    return None
+from .hook_command import hook
+from .rules_command import rules
 
 
 @click.group(invoke_without_command=True)
@@ -52,20 +18,5 @@ def main(ctx):
         sys.exit(1)
 
 
-@main.command()
-def hook():
-    """Claude Code hook entry point"""
-    c = create_context()
-
-    result = _evaluate_rules(c)
-
-    match c:
-        case PreToolUseContext():
-            if result and result.action == Action.DENY:
-                c.output.deny(result.message)
-            else:
-                c.output.exit_success()
-
-
-# Add the rules command to the main CLI group
-main.add_command(rules_command)
+main.add_command(hook)
+main.add_command(rules)
