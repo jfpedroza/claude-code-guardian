@@ -148,15 +148,12 @@ class PathAccessRule(Rule):
         return None
 
     def _get_operation_scope(self, tool_name: str) -> Scope:
-        """Determine if the tool operation is read or write."""
         if tool_name == "Read":
             return Scope.READ
         else:  # Edit, MultiEdit, Write
             return Scope.WRITE
 
     def _path_matches_pattern(self, file_path: str, pattern: str) -> bool:
-        """Check if a file path matches a glob pattern."""
-        # Convert to Path for consistent handling
         path = Path(file_path)
 
         # Handle absolute patterns
@@ -167,7 +164,6 @@ class PathAccessRule(Rule):
         return fnmatch(str(path), pattern) or fnmatch(path.name, pattern)
 
     def _scope_applies(self, pattern_scope: Scope, operation_scope: Scope) -> bool:
-        """Check if a pattern scope applies to the current operation scope."""
         if pattern_scope == Scope.READ_WRITE:
             return True
         return pattern_scope == operation_scope

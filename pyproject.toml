@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "cchooks>=0.1.2,<0.2",
     "click>=8.0.0",
+    "PyYAML>=6.0",
 ]
 
 [project.scripts]
@@ -16,7 +17,10 @@ claude-code-guardian = "ccguardian.cli:main"
 package = true
 
 [tool.setuptools.packages.find]
-include = ["ccguardian"]
+include = ["ccguardian*"]
+
+[tool.setuptools.package-data]
+ccguardian = ["config/*.yml"]
 
 [dependency-groups]
 dev = [
@@ -25,6 +29,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.2.0",
     "pytest-mock>=3.10.0",
+    "types-pyyaml>=6.0.12.20250516",
 ]
 test = [
     "pytest>=8.0.0",
@@ -46,11 +51,7 @@ addopts = [
     "--cov-report=html:htmlcov",
     "--cov-report=xml",
     "--cov-fail-under=80",
-]
-markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "unit: marks tests as unit tests",
+    "--cov-config=pyproject.toml",
 ]
 filterwarnings = [
     "error",

@@ -8,7 +8,8 @@
       "Bash(scripts/format.sh)",
       "Bash(uv run claude-code-guardian)",
       "Bash(uv run claude-code-guardian -h)",
-      "Bash(uv run claude-code-guardian --help)"
+      "Bash(uv run claude-code-guardian --help)",
+      "Bash(uv run claude-code-guardian rules:*)"
     ],
     "deny": []
   }

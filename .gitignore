@@ -16,4 +16,5 @@ coverage.xml
 tmp/
 
 .claude/settings.local.json
+.claude/guardian/config.local.yml
 CLAUDE.local.md
