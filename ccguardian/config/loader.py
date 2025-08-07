@@ -28,7 +28,10 @@ class ConfigurationLoader:
         env_config_dir = os.getenv("CLAUDE_CODE_GUARDIAN_CONFIG")
 
         if env_config_dir:
-            config_path = Path(env_config_dir) / "config.yml"
+            validated_dir = self._validate_config_dir(
+                env_config_dir, "CLAUDE_CODE_GUARDIAN_CONFIG"
+            )
+            config_path = validated_dir / "config.yml"
         else:
             home = Path.home()
             config_path = home / ".config" / "claude-code-guardian" / "config.yml"
@@ -43,7 +46,7 @@ class ConfigurationLoader:
         # Otherwise default to current working directory for testing
         project_dir_env = os.getenv("CLAUDE_PROJECT_DIR")
         if project_dir_env:
-            project_root = Path(project_dir_env)
+            project_root = self._validate_project_dir(project_dir_env)
         else:
             project_root = Path.cwd()
 
@@ -115,3 +118,51 @@ class ConfigurationLoader:
                 configurations.append(config)
 
         return configurations
+
+    def _validate_path(
+        self, path_string: str, env_var_name: str, check_exists: bool = False
+    ) -> Path:
+        """
+        Validate a path from environment variable to prevent path traversal attacks.
+
+        Args:
+            path_string: Raw path string from environment variable
+            env_var_name: Name of environment variable for error messages
+            check_exists: Whether to log a warning if path doesn't exist
+
+        Returns:
+            Validated Path object
+
+        Raises:
+            ValueError: If path is invalid or potentially unsafe
+        """
+        # Check for path traversal and absolute path before resolving
+        raw_path = Path(path_string).expanduser()
+
+        if not raw_path.is_absolute():
+            logger.error(f"{env_var_name} must be absolute path, got: {path_string}")
+            raise ValueError(f"{env_var_name} must be an absolute path")
+
+        if ".." in raw_path.parts:
+            logger.error(f"{env_var_name} contains parent directory references: {path_string}")
+            raise ValueError(f"{env_var_name} cannot contain '..' path components")
+
+        try:
+            path = raw_path.resolve()
+        except (OSError, RuntimeError, ValueError) as e:
+            logger.error(f"Failed to resolve {env_var_name} path '{path_string}': {e}")
+            raise ValueError(f"Invalid {env_var_name} path: {e}") from e
+
+        if check_exists and not path.exists():
+            logger.warning(f"{env_var_name} does not exist: {path}")
+
+        logger.debug(f"Validated {env_var_name}: {path}")
+        return path
+
+    def _validate_project_dir(self, project_dir_path: str) -> Path:
+        """Validate CLAUDE_PROJECT_DIR to prevent path traversal attacks."""
+        return self._validate_path(project_dir_path, "CLAUDE_PROJECT_DIR", check_exists=True)
+
+    def _validate_config_dir(self, config_dir_path: str, env_var_name: str) -> Path:
+        """Validate configuration directory path to prevent path traversal attacks."""
+        return self._validate_path(config_dir_path, env_var_name)

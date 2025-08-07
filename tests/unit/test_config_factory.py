@@ -371,16 +371,23 @@ class TestRuleFactory:
             )
 
     def test_validate_glob_pattern_invalid(self):
-        # Note: fnmatch is very forgiving, so most patterns will be valid
-        # This test documents the behavior more than finding truly invalid patterns
+        # Test empty pattern - should be invalid with improved validation
+        assert not self.factory._validate_glob_pattern(""), "Empty pattern should be invalid"
 
-        # Test empty pattern
-        assert self.factory._validate_glob_pattern(""), "Empty pattern should be valid in fnmatch"
-
-        # Test None handling (should be caught by type checking before this method)
+        # Test None handling
         result = self.factory._validate_glob_pattern(None)
-        # If it doesn't raise an exception, it should return False
         assert not result, "None pattern should be invalid"
+
+        # Test unbalanced brackets - should be invalid with improved validation
+        assert not self.factory._validate_glob_pattern("[unclosed"), (
+            "Unbalanced bracket should be invalid"
+        )
+        assert not self.factory._validate_glob_pattern("unopened]"), (
+            "Unmatched closing bracket should be invalid"
+        )
+        assert not self.factory._validate_glob_pattern("[[nested]]"), (
+            "Nested brackets should be invalid"
+        )
 
     def test_create_pre_use_bash_rule_invalid_regex(self):
         config = {

@@ -3,8 +3,9 @@
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
+import pytest
 import yaml
 
 from ccguardian.config.loader import ConfigurationLoader
@@ -189,3 +190,39 @@ class TestConfigurationLoader:
                 assert len(result) == 2
                 assert result[0].source.source_type == SourceType.DEFAULT
                 assert result[1].source.source_type == SourceType.SHARED
+
+    def test_validate_project_dir_valid(self, temp_config_dir):
+        # Valid absolute path
+        result = self.loader._validate_project_dir(str(temp_config_dir))
+        assert result == temp_config_dir.resolve()
+
+    def test_validate_project_dir_invalid_relative(self):
+        with pytest.raises(ValueError, match="must be an absolute path"):
+            self.loader._validate_project_dir("relative/path")
+
+    def test_validate_project_dir_invalid_traversal(self):
+        with pytest.raises(ValueError, match="cannot contain '\\.\\.' path components"):
+            self.loader._validate_project_dir("/some/path/../../../etc")
+
+    def test_validate_project_dir_resolve_error(self):
+        mock_path = MagicMock()
+        mock_path.expanduser.return_value = mock_path
+        mock_path.is_absolute.return_value = True
+        mock_path.parts = ["/", "valid", "path"]
+        mock_path.resolve.side_effect = OSError("Mock resolve error")
+
+        with patch("ccguardian.config.loader.Path", return_value=mock_path):
+            with pytest.raises(ValueError, match="Invalid CLAUDE_PROJECT_DIR path"):
+                self.loader._validate_project_dir("/valid/path")
+
+    def test_validate_config_dir_valid(self, temp_config_dir):
+        result = self.loader._validate_config_dir(str(temp_config_dir), "TEST_VAR")
+        assert result == temp_config_dir.resolve()
+
+    def test_validate_config_dir_invalid_relative(self):
+        with pytest.raises(ValueError, match="TEST_VAR must be an absolute path"):
+            self.loader._validate_config_dir("relative/path", "TEST_VAR")
+
+    def test_validate_config_dir_invalid_traversal(self):
+        with pytest.raises(ValueError, match="cannot contain '\\.\\.' path components"):
+            self.loader._validate_config_dir("/some/path/../../../etc", "TEST_VAR")

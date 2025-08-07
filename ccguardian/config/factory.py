@@ -1,6 +1,5 @@
 """Rule factory for converting YAML configuration to Python rule objects."""
 
-import fnmatch
 import logging
 import re
 from typing import Any
@@ -319,11 +318,43 @@ class RuleFactory:
         Returns:
             True if pattern is a valid glob pattern, False otherwise
         """
+        if not pattern or not isinstance(pattern, str):
+            return False
+
         try:
-            # Test the pattern by trying to match against a dummy path
-            # If fnmatch.fnmatch doesn't raise an exception, the pattern is valid
-            fnmatch.fnmatch("test/path.txt", pattern)
+            # Use Path.match() which provides better validation than fnmatch
+            # Test with a realistic dummy path that should work with valid patterns
+            from pathlib import Path
+
+            test_path = Path("test/path/file.txt")
+            test_path.match(pattern)
+
+            # Additional validation for common glob pattern issues
+            # Check for unbalanced brackets which Path.match() might not catch
+            bracket_count = 0
+            in_bracket = False
+            for char in pattern:
+                if char == "[":
+                    if in_bracket:
+                        return False  # Nested brackets not allowed
+                    in_bracket = True
+                    bracket_count += 1
+                elif char == "]":
+                    if not in_bracket:
+                        return False  # Closing bracket without opening
+                    in_bracket = False
+                    bracket_count -= 1
+
+            # Check for unmatched opening brackets
+            if in_bracket or bracket_count != 0:
+                return False
+
             return True
+        except (ValueError, OSError):
+            # Path.match() raises ValueError for invalid patterns
+            # OSError can occur with some malformed patterns
+            return False
         except Exception:
-            # fnmatch is generally very forgiving, but catch any potential issues
+            # Catch any other unexpected issues
+            logger.warning(f"Unexpected error validating glob pattern '{pattern}'")
             return False
