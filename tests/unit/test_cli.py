@@ -1,5 +1,7 @@
 """Tests for CLI functionality."""
 
+import tempfile
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
@@ -185,30 +187,45 @@ class TestRulesCommand:
         assert "Display configuration diagnostics and rule information" in result.output
 
     def test_rules_command_integration(self):
-        result = self.runner.invoke(rules, [])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create empty temporary directories to isolate from user configs
+            user_dir = Path(tmpdir) / "user_config"
+            project_dir = Path(tmpdir) / "project"
+            user_dir.mkdir()
+            project_dir.mkdir()
 
-        assert result.exit_code == 0
+            with patch.dict(
+                "os.environ",
+                {
+                    "CLAUDE_CODE_GUARDIAN_CONFIG": str(user_dir),
+                    "CLAUDE_PROJECT_DIR": str(project_dir),
+                },
+                clear=False,
+            ):
+                result = self.runner.invoke(rules, [])
 
-        assert "Configuration Sources:" in result.output
-        assert "✓ Default:" in result.output
-        assert "✗ User:" in result.output
-        assert "✗ Shared:" in result.output
-        assert "✗ Local:" in result.output
-        assert "✗ Environment: CLAUDE_CODE_GUARDIAN_CONFIG (not set)" in result.output
+                assert result.exit_code == 0
 
-        assert "Merged Configuration:" in result.output
-        assert "Default Rules: enabled" in result.output
-        assert "Total Rules:" in result.output
-        assert "Active Rules:" in result.output
+                assert "Configuration Sources:" in result.output
+                assert "✓ Default:" in result.output
+                assert "✗ User:" in result.output
+                assert "✗ Shared:" in result.output
+                assert "✗ Local:" in result.output
+                assert "✓ Environment: CLAUDE_CODE_GUARDIAN_CONFIG" in result.output
 
-        assert "Rule Evaluation Order (by priority):" in result.output
-        assert "performance.grep_suggestion" in result.output
-        assert "performance.find_suggestion" in result.output
-        assert "Type: pre_use_bash" in result.output
-        assert "Priority: 50" in result.output
+                assert "Merged Configuration:" in result.output
+                assert "Default Rules: enabled" in result.output
+                assert "Total Rules:" in result.output
+                assert "Active Rules:" in result.output
 
-        assert "Commands:" in result.output
-        assert "action: deny" in result.output
+                assert "Rule Evaluation Order (by priority):" in result.output
+                assert "performance.grep_suggestion" in result.output
+                assert "performance.find_suggestion" in result.output
+                assert "Type: pre_use_bash" in result.output
+                assert "Priority: 50" in result.output
+
+                assert "Commands:" in result.output
+                assert "action: deny" in result.output
 
     def test_rules_command_with_env_var(self):
         import os

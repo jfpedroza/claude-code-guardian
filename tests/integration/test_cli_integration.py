@@ -1,10 +1,26 @@
 """Integration tests for the CLI."""
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+
+def _get_clean_env():
+    """Get environment variables with config paths pointing to empty directories."""
+    env = os.environ.copy()
+    temp_dir = tempfile.mkdtemp()
+    user_dir = Path(temp_dir) / "user_config"
+    project_dir = Path(temp_dir) / "project"
+
+    user_dir.mkdir(parents=True)
+    project_dir.mkdir(parents=True)
+
+    env["CLAUDE_CODE_GUARDIAN_CONFIG"] = str(user_dir)
+    env["CLAUDE_PROJECT_DIR"] = str(project_dir)
+    return env
 
 
 class TestCLIIntegration:
@@ -37,6 +53,7 @@ class TestHookCommandIntegration:
             input=json.dumps(hook_input),
             capture_output=True,
             text=True,
+            env=_get_clean_env(),
         )
 
         assert result.returncode == 0
@@ -58,6 +75,7 @@ class TestHookCommandIntegration:
             input=json.dumps(hook_input),
             capture_output=True,
             text=True,
+            env=_get_clean_env(),
         )
 
         assert result.returncode == 0
@@ -94,12 +112,15 @@ rules:
                 "tool_input": {"command": "echo something test"},
             }
 
+            env = _get_clean_env()
+            env["CLAUDE_PROJECT_DIR"] = tmpdir
+
             result = subprocess.run(
                 [sys.executable, "-m", "ccguardian.cli", "hook"],
                 input=json.dumps(hook_input),
                 capture_output=True,
                 text=True,
-                cwd=tmpdir,
+                env=env,
             )
 
             assert result.returncode == 0
@@ -114,7 +135,7 @@ rules:
                 input=json.dumps(hook_input),
                 capture_output=True,
                 text=True,
-                cwd=tmpdir,
+                env=env,
             )
 
             assert result.returncode == 0
@@ -131,6 +152,7 @@ class TestRulesCommandIntegration:
             [sys.executable, "-m", "ccguardian.cli", "rules"],
             capture_output=True,
             text=True,
+            env=_get_clean_env(),
         )
 
         assert result.returncode == 0
