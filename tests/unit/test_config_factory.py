@@ -2,6 +2,7 @@
 
 import pytest
 
+from ccguardian.config.exceptions import ConfigValidationError
 from ccguardian.config.factory import RuleFactory
 from ccguardian.rules import (
     DEFAULT_PRIORITY,
@@ -172,23 +173,23 @@ class TestRuleFactory:
     def test_create_rule_missing_type(self):
         config = {"pattern": "test"}
 
-        rule = self.factory.create_rule("invalid.rule", config)
-
-        assert rule is None
+        with pytest.raises(ConfigValidationError, match="missing required 'type' field"):
+            self.factory.create_rule("invalid.rule", config)
 
     def test_create_rule_unknown_type(self):
         config = {"type": "unknown_type", "pattern": "test"}
 
-        rule = self.factory.create_rule("invalid.rule", config)
-
-        assert rule is None
+        with pytest.raises(ConfigValidationError, match="Unknown rule type 'unknown_type'"):
+            self.factory.create_rule("invalid.rule", config)
 
     def test_create_rule_no_patterns(self):
         config = {"type": "pre_use_bash", "action": "deny"}
 
-        rule = self.factory.create_rule("invalid.rule", config)
-
-        assert rule is None
+        with pytest.raises(
+            ConfigValidationError,
+            match="PreUseBashRule requires either 'pattern' or 'commands' field",
+        ):
+            self.factory.create_rule("invalid.rule", config)
 
     @pytest.mark.parametrize(
         ("input_value", "expected"),
@@ -200,11 +201,18 @@ class TestRuleFactory:
         ],
     )
     def test_parse_action_valid(self, input_value, expected):
-        assert self.factory._parse_action(input_value) == expected
+        assert self.factory._parse_action(input_value, "test.rule") == expected
 
-    @pytest.mark.parametrize("invalid_input", ["invalid", 123, None])
-    def test_parse_action_invalid(self, invalid_input):
-        assert self.factory._parse_action(invalid_input) is None
+    def test_parse_action_invalid_string(self):
+        with pytest.raises(ConfigValidationError, match="Invalid action value"):
+            self.factory._parse_action("invalid", "test.rule")
+
+    def test_parse_action_invalid_type(self):
+        with pytest.raises(ConfigValidationError, match="Action must be a string"):
+            self.factory._parse_action(123, "test.rule")
+
+    def test_parse_action_none(self):
+        assert self.factory._parse_action(None, "test.rule") is None
 
     @pytest.mark.parametrize(
         ("input_value", "expected"),
@@ -216,37 +224,52 @@ class TestRuleFactory:
         ],
     )
     def test_parse_scope_valid(self, input_value, expected):
-        assert self.factory._parse_scope(input_value) == expected
+        assert self.factory._parse_scope(input_value, "test.rule") == expected
 
-    @pytest.mark.parametrize("invalid_input", ["invalid", 123, None])
-    def test_parse_scope_invalid(self, invalid_input):
-        assert self.factory._parse_scope(invalid_input) is None
+    def test_parse_scope_invalid_string(self):
+        with pytest.raises(ConfigValidationError, match="Invalid scope value"):
+            self.factory._parse_scope("invalid", "test.rule")
+
+    def test_parse_scope_invalid_type(self):
+        with pytest.raises(ConfigValidationError, match="Scope must be a string"):
+            self.factory._parse_scope(123, "test.rule")
+
+    def test_parse_scope_none(self):
+        assert self.factory._parse_scope(None, "test.rule") is None
 
     def test_convert_command_patterns_invalid_commands(self):
         config = {"commands": "not a list"}
-        patterns = self.factory._convert_to_command_patterns(config)
-        assert patterns == []
+        with pytest.raises(ConfigValidationError, match="'commands' field must be a list"):
+            self.factory._convert_to_command_patterns(config, "test.rule")
 
         config = {"commands": [{"no_pattern": "value"}]}
-        patterns = self.factory._convert_to_command_patterns(config)
-        assert patterns == []
+        with pytest.raises(
+            ConfigValidationError, match="Command pattern at index 0 missing 'pattern' field"
+        ):
+            self.factory._convert_to_command_patterns(config, "test.rule")
 
         config = {"commands": ["not a dict"]}
-        patterns = self.factory._convert_to_command_patterns(config)
-        assert patterns == []
+        with pytest.raises(
+            ConfigValidationError, match="Command configuration at index 0 must be a dictionary"
+        ):
+            self.factory._convert_to_command_patterns(config, "test.rule")
 
     def test_convert_path_patterns_invalid_paths(self):
         config = {"paths": "not a list"}
-        patterns = self.factory._convert_to_path_patterns(config)
-        assert patterns == []
+        with pytest.raises(ConfigValidationError, match="'paths' field must be a list"):
+            self.factory._convert_to_path_patterns(config, "test.rule")
 
         config = {"paths": [{"no_pattern": "value"}]}
-        patterns = self.factory._convert_to_path_patterns(config)
-        assert patterns == []
+        with pytest.raises(
+            ConfigValidationError, match="Path pattern at index 0 missing 'pattern' field"
+        ):
+            self.factory._convert_to_path_patterns(config, "test.rule")
 
         config = {"paths": ["not a dict"]}
-        patterns = self.factory._convert_to_path_patterns(config)
-        assert patterns == []
+        with pytest.raises(
+            ConfigValidationError, match="Path configuration at index 0 must be a dictionary"
+        ):
+            self.factory._convert_to_path_patterns(config, "test.rule")
 
     def test_create_rules_from_merged_data(self):
         merged_data = {
@@ -268,10 +291,6 @@ class TestRuleFactory:
                 "action": "deny",
                 "priority": 80,
             },
-            "invalid.rule": {
-                "type": "unknown_type",  # This will fail to create
-                "pattern": "test",
-            },
         }
 
         rules = self.factory.create_rules_from_merged_data(merged_data)
@@ -285,10 +304,25 @@ class TestRuleFactory:
         assert rules[2].id == "performance.grep"  # Priority 50
         assert rules[2].priority == DEFAULT_PRIORITY
 
-        # Check types
         assert isinstance(rules[0], PreUseBashRule)
         assert isinstance(rules[1], PathAccessRule)
         assert isinstance(rules[2], PreUseBashRule)
+
+    def test_create_rules_from_merged_data_with_invalid_rule(self):
+        merged_data = {
+            "valid.rule": {
+                "type": "pre_use_bash",
+                "pattern": "test",
+                "action": "deny",
+            },
+            "invalid.rule": {
+                "type": "unknown_type",  # This will cause an error
+                "pattern": "test",
+            },
+        }
+
+        with pytest.raises(ConfigValidationError, match="Unknown rule type 'unknown_type'"):
+            self.factory.create_rules_from_merged_data(merged_data)
 
     def test_create_rules_from_empty_data(self):
         rules = self.factory.create_rules_from_merged_data({})
@@ -304,20 +338,45 @@ class TestRuleFactory:
 
         rules = self.factory.create_rules_from_merged_data(merged_data)
 
-        # Should be sorted by priority (desc) then by ID (asc)
         expected_order = ["rule.a", "rule.d", "rule.b", "rule.c"]
         actual_order = [rule.id for rule in rules]
 
         assert actual_order == expected_order
 
     def test_create_rule_exception_handling(self):
-        # This should trigger an exception during rule creation
         config = {"type": "pre_use_bash", "priority": "not an integer"}
 
-        rule = self.factory.create_rule("error.rule", config)
+        with pytest.raises(
+            ConfigValidationError,
+            match="PreUseBashRule requires either 'pattern' or 'commands' field",
+        ):
+            self.factory.create_rule("error.rule", config)
 
-        # Should return None on exception
-        assert rule is None
+    def test_create_rule_pattern_commands_mutually_exclusive(self):
+        config = {
+            "type": "pre_use_bash",
+            "pattern": "test",
+            "commands": [{"pattern": "another", "action": "deny"}],
+        }
+
+        with pytest.raises(
+            ConfigValidationError,
+            match="Cannot specify both 'pattern' and 'commands' fields - they are mutually exclusive",
+        ):
+            self.factory.create_rule("conflicting.rule", config)
+
+    def test_create_rule_pattern_paths_mutually_exclusive(self):
+        config = {
+            "type": "path_access",
+            "pattern": "*.env",
+            "paths": [{"pattern": "*.log", "action": "deny"}],
+        }
+
+        with pytest.raises(
+            ConfigValidationError,
+            match="Cannot specify both 'pattern' and 'paths' fields - they are mutually exclusive",
+        ):
+            self.factory.create_rule("conflicting.rule", config)
 
     def test_validate_regex_pattern_valid(self):
         valid_patterns = [
@@ -396,51 +455,38 @@ class TestRuleFactory:
             "action": "deny",
         }
 
-        rule = self.factory.create_rule("invalid.regex", config)
-
-        # Should return None due to invalid regex
-        assert rule is None
+        with pytest.raises(ConfigValidationError, match="Invalid regex pattern: '\\[unclosed'"):
+            self.factory.create_rule("invalid.regex", config)
 
     def test_create_pre_use_bash_rule_invalid_regex_in_commands(self):
         config = {
             "type": "pre_use_bash",
             "commands": [
                 {"pattern": "valid.*pattern", "action": "allow"},
-                {"pattern": "[unclosed", "action": "deny"},  # Invalid regex
+                {"pattern": "[unclosed", "action": "deny"},
                 {"pattern": "another.*valid", "action": "warn"},
             ],
             "action": "continue",
         }
 
-        rule = self.factory.create_rule("mixed.regex", config)
-
-        # Should create rule but skip invalid pattern
-        assert isinstance(rule, PreUseBashRule)
-        assert len(rule.commands) == 2  # Only valid patterns included
-        assert rule.commands[0].pattern == "valid.*pattern"
-        assert rule.commands[1].pattern == "another.*valid"
-
-    def test_create_path_access_rule_invalid_glob(self):
-        # Since fnmatch is very forgiving, we'll test the glob validator directly with None
-        # This should be caught earlier in validation, but let's test the glob validator directly
-        assert not self.factory._validate_glob_pattern(None) or True  # Handle potential exception
+        with pytest.raises(
+            ConfigValidationError, match="Invalid regex pattern at index 1: '\\[unclosed'"
+        ):
+            self.factory.create_rule("mixed.regex", config)
 
     def test_create_path_access_rule_invalid_glob_in_paths(self):
         """Test creating PathAccessRule with mixed valid/invalid globs in paths list."""
         config = {
             "type": "path_access",
             "paths": [
-                {"pattern": "**/*.env", "action": "deny"},  # Valid
-                {"action": "warn"},  # Missing pattern field - should be skipped
-                {"pattern": "**/*.log", "action": "allow"},  # Valid
+                {"pattern": "**/*.env", "action": "deny"},
+                {"action": "warn"},
+                {"pattern": "**/*.log", "action": "allow"},
             ],
             "action": "deny",
         }
 
-        rule = self.factory.create_rule("mixed.globs", config)
-
-        # Should create rule but skip the entry with missing pattern
-        assert isinstance(rule, PathAccessRule)
-        assert len(rule.paths) == 2  # Only valid patterns included
-        assert rule.paths[0].pattern == "**/*.env"
-        assert rule.paths[1].pattern == "**/*.log"
+        with pytest.raises(
+            ConfigValidationError, match="Path pattern at index 1 missing 'pattern' field"
+        ):
+            self.factory.create_rule("mixed.globs", config)

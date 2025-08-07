@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from .exceptions import ConfigValidationError
 from .types import ConfigurationSource, RawConfiguration, SourceType
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,18 @@ class ConfigurationLoader:
         return [default, user, shared, local]
 
     def load_yaml_file(self, source: ConfigurationSource) -> RawConfiguration | None:
-        """Load and parse a YAML configuration file safely."""
+        """
+        Load and parse a YAML configuration file safely.
+
+        Args:
+            source: Configuration source to load
+
+        Returns:
+            RawConfiguration object with loaded data, or None if file doesn't exist or is empty
+
+        Raises:
+            ConfigValidationError: If file loading or parsing fails
+        """
         if not source.exists:
             logger.debug(f"Configuration file does not exist: {source.path}")
             return None
@@ -84,31 +96,54 @@ class ConfigurationLoader:
                 data = yaml.safe_load(f)
 
             if data is None:
-                logger.warning(f"Configuration file is empty: {source.path}")
+                # Empty YAML file - treat as no configuration
+                logger.debug(f"Configuration file is empty: {source.path}")
                 return None
 
             if not isinstance(data, dict):
-                logger.error(f"Configuration file must contain a YAML object: {source.path}")
-                return None
+                raise ConfigValidationError(
+                    f"Configuration file must contain a YAML object, got {type(data).__name__}",
+                    source_path=str(source.path),
+                )
 
             logger.debug(f"Successfully loaded configuration from: {source.path}")
             return RawConfiguration(source=source, data=data)
 
+        except ConfigValidationError:
+            # Re-raise ConfigValidationError as-is to avoid double-wrapping
+            raise
         except yaml.YAMLError as e:
-            logger.error(f"Failed to parse YAML configuration {source.path}: {e}")
-            return None
-        except FileNotFoundError:
-            logger.debug(f"Configuration file not found: {source.path}")
-            return None
-        except PermissionError:
-            logger.error(f"Permission denied reading configuration: {source.path}")
-            return None
+            raise ConfigValidationError(
+                f"Invalid YAML syntax: {e}",
+                source_path=str(source.path),
+            ) from e
+        except FileNotFoundError as e:
+            # This shouldn't happen if exists=True, but handle it anyway
+            raise ConfigValidationError(
+                f"Configuration file not found: {source.path}",
+                source_path=str(source.path),
+            ) from e
+        except PermissionError as e:
+            raise ConfigValidationError(
+                "Permission denied reading configuration file",
+                source_path=str(source.path),
+            ) from e
         except Exception as e:
-            logger.error(f"Unexpected error loading configuration {source.path}: {e}")
-            return None
+            raise ConfigValidationError(
+                f"Unexpected error loading configuration: {e}",
+                source_path=str(source.path),
+            ) from e
 
     def load_all_configurations(self) -> list[RawConfiguration]:
-        """Load all available configurations in hierarchical order."""
+        """
+        Load all available configurations in hierarchical order.
+
+        Returns:
+            List of RawConfiguration objects
+
+        Raises:
+            ConfigValidationError: If any configuration file fails to load or parse
+        """
         sources = self.discover_all_sources()
         configurations = []
 
@@ -134,27 +169,24 @@ class ConfigurationLoader:
             Validated Path object
 
         Raises:
-            ValueError: If path is invalid or potentially unsafe
+            ConfigValidationError: If path is invalid or potentially unsafe
         """
         # Check for path traversal and absolute path before resolving
         raw_path = Path(path_string).expanduser()
 
         if not raw_path.is_absolute():
-            logger.error(f"{env_var_name} must be absolute path, got: {path_string}")
-            raise ValueError(f"{env_var_name} must be an absolute path")
+            raise ConfigValidationError(f"{env_var_name} must be an absolute path")
 
         if ".." in raw_path.parts:
-            logger.error(f"{env_var_name} contains parent directory references: {path_string}")
-            raise ValueError(f"{env_var_name} cannot contain '..' path components")
+            raise ConfigValidationError(f"{env_var_name} cannot contain '..' path components")
 
         try:
             path = raw_path.resolve()
         except (OSError, RuntimeError, ValueError) as e:
-            logger.error(f"Failed to resolve {env_var_name} path '{path_string}': {e}")
-            raise ValueError(f"Invalid {env_var_name} path: {e}") from e
+            raise ConfigValidationError(f"Invalid {env_var_name} path: {e}") from e
 
         if check_exists and not path.exists():
-            logger.warning(f"{env_var_name} does not exist: {path}")
+            raise ConfigValidationError(f"{env_var_name} directory does not exist: {path}")
 
         logger.debug(f"Validated {env_var_name}: {path}")
         return path

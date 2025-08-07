@@ -4,6 +4,7 @@ import logging
 
 import click
 
+from ..config import ConfigValidationError
 from ..config.manager import ConfigurationManager
 from ..rules import PathAccessRule, PreUseBashRule, Rule
 
@@ -142,6 +143,10 @@ def rules() -> None:
         output = format_rules_output(config_manager)
         click.echo(output)
 
+    except ConfigValidationError as e:
+        logger.error(f"Configuration validation failed: {e}")
+        click.echo(f"Configuration Error: {e}", err=True)
+        raise click.ClickException("Invalid configuration") from e
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")
         click.echo(f"Error: Failed to load configuration: {e}", err=True)

@@ -4,6 +4,7 @@ import fnmatch
 import logging
 from typing import Any
 
+from .exceptions import ConfigValidationError
 from .factory import RuleFactory
 from .types import Configuration, RawConfiguration
 
@@ -79,6 +80,9 @@ class ConfigurationMerger:
             Tuple of (enabled, patterns) where:
             - enabled: True if any default rules should be included
             - patterns: None for all, or list of glob patterns to match
+
+        Raises:
+            ConfigValidationError: If default_rules setting is invalid
         """
         if default_rules_setting is True:
             return True, None
@@ -88,10 +92,9 @@ class ConfigurationMerger:
             patterns = [str(pattern) for pattern in default_rules_setting]
             return True, patterns
         else:
-            logger.warning(
-                f"Invalid default_rules setting: {default_rules_setting}, defaulting to true"
+            raise ConfigValidationError(
+                f"Invalid default_rules setting: {default_rules_setting}. Must be boolean or list of patterns"
             )
-            return True, None
 
     def _merge_rules_by_id(
         self,
@@ -115,17 +118,18 @@ class ConfigurationMerger:
         for raw_config in raw_configs:
             rules_data = raw_config.data.get("rules", {})
             if not isinstance(rules_data, dict):
-                logger.warning(
-                    f"Invalid rules section in {raw_config.source.path}: not a dictionary"
+                raise ConfigValidationError(
+                    "Invalid rules section: must be a dictionary",
+                    source_path=str(raw_config.source.path),
                 )
-                continue
 
             for rule_id, rule_config in rules_data.items():
                 if not isinstance(rule_config, dict):
-                    logger.warning(
-                        f"Invalid rule config for '{rule_id}' in {raw_config.source.path}: not a dictionary"
+                    raise ConfigValidationError(
+                        f"Invalid rule config for '{rule_id}': must be a dictionary",
+                        rule_id=rule_id,
+                        source_path=str(raw_config.source.path),
                     )
-                    continue
 
                 if (
                     raw_config.source.source_type.value == "default"
@@ -184,10 +188,10 @@ class ConfigurationMerger:
         """
         for key, value in source.items():
             if key == "type" and key in target and target[key] != value:
-                logger.warning(
-                    f"Cannot change rule type for '{rule_id}' in {source_path}: "
-                    f"'{target[key]}' -> '{value}' (ignoring)"
+                raise ConfigValidationError(
+                    f"Cannot change rule type from '{target[key]}' to '{value}'",
+                    rule_id=rule_id,
+                    source_path=str(source_path),
                 )
-                continue
 
             target[key] = value

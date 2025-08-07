@@ -5,8 +5,10 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 import yaml
 
+from ccguardian.config.exceptions import ConfigValidationError
 from ccguardian.config.loader import ConfigurationLoader
 from ccguardian.config.manager import ConfigurationManager
 from ccguardian.config.merger import ConfigurationMerger
@@ -222,17 +224,8 @@ class TestConfigurationPipeline:
                 ),
                 patch.dict("os.environ", {"CLAUDE_PROJECT_DIR": str(project_dir)}, clear=False),
             ):
-                # Load configurations - should handle invalid YAML gracefully
-                raw_configs = self.loader.load_all_configurations()
-
-                # Should only load valid configs (default + shared)
-                assert len(raw_configs) == 2
-                assert raw_configs[0].source.source_type == SourceType.DEFAULT
-                assert raw_configs[1].source.source_type == SourceType.SHARED
-
-                # Merge should work with partial configs
-                merged_config = self.merger.merge_configurations(raw_configs)
-                assert len(merged_config.sources) == 2
+                with pytest.raises(ConfigValidationError, match="Invalid YAML syntax"):
+                    self.loader.load_all_configurations()
 
 
 class TestConfigurationManagerIntegration:

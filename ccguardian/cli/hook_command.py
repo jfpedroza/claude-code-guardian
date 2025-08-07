@@ -5,6 +5,7 @@ import logging
 import click
 from cchooks import PreToolUseContext, exit_non_block, exit_success, safe_create_context
 
+from ..config import ConfigValidationError
 from ..config.manager import ConfigurationManager
 from ..rules import Action, Context, RuleResult
 
@@ -47,6 +48,9 @@ def hook():
                 logger.warning(f"Unsupported context type: {type(context).__name__}")
                 exit_success()
 
+    except ConfigValidationError as e:
+        logger.error(f"Configuration validation failed: {e}")
+        exit_non_block(f"Claude Code Guardian configuration error: {e}")
     except Exception as e:
-        logger.error(f"Hook execution failed: {e}")
+        logger.error(f"Hook execution failed: {e}", exc_info=True)
         exit_non_block(f"Claude Code Guardian hook failed: {e}")

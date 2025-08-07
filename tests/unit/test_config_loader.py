@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 import yaml
 
+from ccguardian.config.exceptions import ConfigValidationError
 from ccguardian.config.loader import ConfigurationLoader
 from ccguardian.config.types import ConfigurationSource, SourceType
 
@@ -59,18 +60,27 @@ class TestConfigurationLoader:
                 assert local.path == expected_dir / "config.local.yml"
 
     @patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/project/root"}, clear=True)
-    def test_find_project_configs_not_found_env_var(self):
-        """Test finding project configs using CLAUDE_PROJECT_DIR when .claude/guardian doesn't exist."""
-        shared, local = self.loader.find_project_configs()
+    def test_find_project_configs_env_var_nonexistent_dir(self):
+        """Test finding project configs when CLAUDE_PROJECT_DIR points to nonexistent directory."""
+        with pytest.raises(
+            ConfigValidationError, match="CLAUDE_PROJECT_DIR directory does not exist"
+        ):
+            self.loader.find_project_configs()
 
-        assert shared.source_type == SourceType.SHARED
-        assert local.source_type == SourceType.LOCAL
-        assert not shared.exists
-        assert not local.exists
+    def test_find_project_configs_env_var_no_guardian_dir(self):
+        """Test finding project configs when CLAUDE_PROJECT_DIR exists but .claude/guardian doesn't."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": tmpdir}, clear=True):
+                shared, local = self.loader.find_project_configs()
 
-        expected_dir = Path("/project/root") / ".claude" / "guardian"
-        assert shared.path == expected_dir / "config.yml"
-        assert local.path == expected_dir / "config.local.yml"
+                assert shared.source_type == SourceType.SHARED
+                assert local.source_type == SourceType.LOCAL
+                assert not shared.exists
+                assert not local.exists
+
+                expected_dir = Path(tmpdir) / ".claude" / "guardian"
+                assert shared.path == expected_dir / "config.yml"
+                assert local.path == expected_dir / "config.local.yml"
 
     def test_find_project_configs_found_env_var(self):
         """Test finding project configs using CLAUDE_PROJECT_DIR when .claude/guardian exists."""
@@ -147,8 +157,8 @@ class TestConfigurationLoader:
         try:
             source = ConfigurationSource(source_type=SourceType.USER, path=temp_path, exists=True)
 
-            result = self.loader.load_yaml_file(source)
-            assert result is None
+            with pytest.raises(ConfigValidationError, match="Invalid YAML syntax"):
+                self.loader.load_yaml_file(source)
         finally:
             temp_path.unlink()
 
@@ -160,8 +170,10 @@ class TestConfigurationLoader:
         try:
             source = ConfigurationSource(source_type=SourceType.USER, path=temp_path, exists=True)
 
-            result = self.loader.load_yaml_file(source)
-            assert result is None
+            with pytest.raises(
+                ConfigValidationError, match="Configuration file must contain a YAML object"
+            ):
+                self.loader.load_yaml_file(source)
         finally:
             temp_path.unlink()
 
@@ -176,17 +188,18 @@ class TestConfigurationLoader:
                 ]
                 mock_discover.return_value = sources
 
-                # Mock loading - only return configs for existing files
+                # Mock loading - return configs with data for existing files, None for non-existing
                 def mock_load_side_effect(source):
                     if source.exists:
                         return Mock(source=source, data={"test": source.source_type.value})
-                    return None
+                    else:
+                        return None
 
                 mock_load.side_effect = mock_load_side_effect
 
                 result = self.loader.load_all_configurations()
 
-                # Should only get configs for existing files
+                # Should only get configs that exist (None configs are filtered out)
                 assert len(result) == 2
                 assert result[0].source.source_type == SourceType.DEFAULT
                 assert result[1].source.source_type == SourceType.SHARED
@@ -197,11 +210,13 @@ class TestConfigurationLoader:
         assert result == temp_config_dir.resolve()
 
     def test_validate_project_dir_invalid_relative(self):
-        with pytest.raises(ValueError, match="must be an absolute path"):
+        with pytest.raises(ConfigValidationError, match="must be an absolute path"):
             self.loader._validate_project_dir("relative/path")
 
     def test_validate_project_dir_invalid_traversal(self):
-        with pytest.raises(ValueError, match="cannot contain '\\.\\.' path components"):
+        with pytest.raises(
+            ConfigValidationError, match="cannot contain '\\.\\.' path components"
+        ):
             self.loader._validate_project_dir("/some/path/../../../etc")
 
     def test_validate_project_dir_resolve_error(self):
@@ -212,17 +227,25 @@ class TestConfigurationLoader:
         mock_path.resolve.side_effect = OSError("Mock resolve error")
 
         with patch("ccguardian.config.loader.Path", return_value=mock_path):
-            with pytest.raises(ValueError, match="Invalid CLAUDE_PROJECT_DIR path"):
+            with pytest.raises(ConfigValidationError, match="Invalid CLAUDE_PROJECT_DIR path"):
                 self.loader._validate_project_dir("/valid/path")
+
+    def test_validate_project_dir_not_exists(self):
+        with pytest.raises(
+            ConfigValidationError, match="CLAUDE_PROJECT_DIR directory does not exist"
+        ):
+            self.loader._validate_project_dir("/nonexistent/directory")
 
     def test_validate_config_dir_valid(self, temp_config_dir):
         result = self.loader._validate_config_dir(str(temp_config_dir), "TEST_VAR")
         assert result == temp_config_dir.resolve()
 
     def test_validate_config_dir_invalid_relative(self):
-        with pytest.raises(ValueError, match="TEST_VAR must be an absolute path"):
+        with pytest.raises(ConfigValidationError, match="TEST_VAR must be an absolute path"):
             self.loader._validate_config_dir("relative/path", "TEST_VAR")
 
     def test_validate_config_dir_invalid_traversal(self):
-        with pytest.raises(ValueError, match="cannot contain '\\.\\.' path components"):
+        with pytest.raises(
+            ConfigValidationError, match="cannot contain '\\.\\.' path components"
+        ):
             self.loader._validate_config_dir("/some/path/../../../etc", "TEST_VAR")

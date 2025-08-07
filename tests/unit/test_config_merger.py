@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+
+from ccguardian.config.exceptions import ConfigValidationError
 from ccguardian.config.merger import ConfigurationMerger
 from ccguardian.config.types import ConfigurationSource, RawConfiguration, SourceType
 
@@ -94,9 +97,8 @@ class TestConfigurationMerger:
         assert patterns == ["security.*", "performance.*"]
 
     def test_process_default_rules_invalid(self):
-        enabled, patterns = self.merger._process_default_rules("invalid")
-        assert enabled is True  # Falls back to default
-        assert patterns is None
+        with pytest.raises(ConfigValidationError, match="Invalid default_rules setting"):
+            self.merger._process_default_rules("invalid")
 
     def test_should_include_default_rule_disabled(self):
         assert not self.merger._should_include_default_rule("security.test", False, None)
@@ -206,12 +208,8 @@ class TestConfigurationMerger:
             },
         )
 
-        result = self.merger._merge_rules_by_id([config1, config2], True, None)
-
-        assert len(result) == 1
-        rule = result["test.rule"]
-        assert rule["type"] == "pre_use_bash"  # Type unchanged
-        assert rule["action"] == "deny"  # Other fields merged
+        with pytest.raises(ConfigValidationError, match="Cannot change rule type"):
+            self.merger._merge_rules_by_id([config1, config2], True, None)
 
     def test_merge_rules_default_filtering(self):
         # Default config with multiple rules
@@ -250,13 +248,8 @@ class TestConfigurationMerger:
             },
         )
 
-        result = self.merger._merge_rules_by_id([raw_config], True, None)
-
-        # Should only include valid rules
-        assert len(result) == 2
-        assert "valid.rule" in result
-        assert "another.valid" in result
-        assert "invalid.rule" not in result
+        with pytest.raises(ConfigValidationError, match="Invalid rule config for 'invalid.rule'"):
+            self.merger._merge_rules_by_id([raw_config], True, None)
 
     def test_merge_rules_invalid_rules_section(self):
         source = ConfigurationSource(SourceType.USER, Path("/user.yml"), True)
@@ -267,7 +260,7 @@ class TestConfigurationMerger:
             },
         )
 
-        result = self.merger._merge_rules_by_id([raw_config], True, None)
-
-        # Should return empty dict
-        assert len(result) == 0
+        with pytest.raises(
+            ConfigValidationError, match="Invalid rules section: must be a dictionary"
+        ):
+            self.merger._merge_rules_by_id([raw_config], True, None)

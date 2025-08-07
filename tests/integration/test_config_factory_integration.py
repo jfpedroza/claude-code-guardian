@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+import pytest
+
+from ccguardian.config.exceptions import ConfigValidationError
 from ccguardian.config.merger import ConfigurationMerger
 from ccguardian.config.types import ConfigurationSource, RawConfiguration, SourceType
 from ccguardian.rules import DEFAULT_PRIORITY, Action, PathAccessRule, PreUseBashRule, Scope
@@ -128,20 +131,8 @@ class TestConfigFactoryIntegration:
             },
         )
 
-        # Merge configurations
-        result = self.merger.merge_configurations([raw_config])
-
-        # Should only create valid rules (2 out of 5)
-        assert len(result.rules) == 2
-
-        rule_ids = {rule.id for rule in result.rules}
-        assert "valid.rule" in rule_ids
-        assert "another.valid" in rule_ids
-
-        # Invalid rules should be filtered out
-        assert "invalid.missing_type" not in rule_ids
-        assert "invalid.unknown_type" not in rule_ids
-        assert "invalid.no_patterns" not in rule_ids
+        with pytest.raises(ConfigValidationError, match="Rule is missing required 'type' field"):
+            self.merger.merge_configurations([raw_config])
 
     def test_merger_rule_merging_with_factory(self):
         # First config
