@@ -1,7 +1,9 @@
 """Shared test utilities for creating mock contexts."""
 
+from pathlib import Path
 from unittest.mock import Mock
 
+import yaml
 from cchooks import PostToolUseContext, PreToolUseContext
 
 
@@ -45,3 +47,11 @@ def post_use_write_context(
         tool_input={"file_path": file_path, "content": content},
         tool_response={"filePath": file_path, "success": success},
     )
+
+
+def create_yaml_config(config_dir: Path, filename: str, config_data: dict) -> Path:
+    config_path = config_dir / filename
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, "w") as f:
+        yaml.dump(config_data, f)
+    return config_path

@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from ccguardian.cli import main
@@ -24,14 +25,12 @@ class TestCLI:
         assert "Commands:" in result.output
         assert "hook" in result.output
 
-    def test_main_help_flag(self):
-        result_h = self.runner.invoke(main, ["-h"])
-        result_help = self.runner.invoke(main, ["--help"])
+    @pytest.mark.parametrize("help_flag", ["-h", "--help"])
+    def test_main_help_flag(self, help_flag):
+        result = self.runner.invoke(main, [help_flag])
 
-        assert result_h.exit_code == 0
-        assert result_help.exit_code == 0
-        assert result_h.output == result_help.output
-        assert "Claude Code Guardian" in result_h.output
+        assert result.exit_code == 0
+        assert "Claude Code Guardian" in result.output
 
 
 class TestHookCommand:

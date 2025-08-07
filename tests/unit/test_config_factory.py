@@ -1,5 +1,7 @@
 """Tests for rule factory functionality."""
 
+import pytest
+
 from ccguardian.config.factory import RuleFactory
 from ccguardian.rules import (
     DEFAULT_PRIORITY,
@@ -188,27 +190,37 @@ class TestRuleFactory:
 
         assert rule is None
 
-    def test_parse_action_valid(self):
-        assert self.factory._parse_action("allow") == Action.ALLOW
-        assert self.factory._parse_action("DENY") == Action.DENY  # Case insensitive
-        assert self.factory._parse_action("suggest") == Action.SUGGEST
-        assert self.factory._parse_action(Action.WARN) == Action.WARN  # Already enum
+    @pytest.mark.parametrize(
+        ("input_value", "expected"),
+        [
+            ("allow", Action.ALLOW),
+            ("DENY", Action.DENY),  # Case insensitive
+            ("suggest", Action.SUGGEST),
+            (Action.WARN, Action.WARN),  # Already enum
+        ],
+    )
+    def test_parse_action_valid(self, input_value, expected):
+        assert self.factory._parse_action(input_value) == expected
 
-    def test_parse_action_invalid(self):
-        assert self.factory._parse_action("invalid") is None
-        assert self.factory._parse_action(123) is None
-        assert self.factory._parse_action(None) is None
+    @pytest.mark.parametrize("invalid_input", ["invalid", 123, None])
+    def test_parse_action_invalid(self, invalid_input):
+        assert self.factory._parse_action(invalid_input) is None
 
-    def test_parse_scope_valid(self):
-        assert self.factory._parse_scope("read") == Scope.READ
-        assert self.factory._parse_scope("WRITE") == Scope.WRITE  # Case insensitive
-        assert self.factory._parse_scope("read_write") == Scope.READ_WRITE
-        assert self.factory._parse_scope(Scope.READ) == Scope.READ  # Already enum
+    @pytest.mark.parametrize(
+        ("input_value", "expected"),
+        [
+            ("read", Scope.READ),
+            ("WRITE", Scope.WRITE),  # Case insensitive
+            ("read_write", Scope.READ_WRITE),
+            (Scope.READ, Scope.READ),  # Already enum
+        ],
+    )
+    def test_parse_scope_valid(self, input_value, expected):
+        assert self.factory._parse_scope(input_value) == expected
 
-    def test_parse_scope_invalid(self):
-        assert self.factory._parse_scope("invalid") is None
-        assert self.factory._parse_scope(123) is None
-        assert self.factory._parse_scope(None) is None
+    @pytest.mark.parametrize("invalid_input", ["invalid", 123, None])
+    def test_parse_scope_invalid(self, invalid_input):
+        assert self.factory._parse_scope(invalid_input) is None
 
     def test_convert_command_patterns_invalid_commands(self):
         config = {"commands": "not a list"}

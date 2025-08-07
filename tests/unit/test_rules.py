@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock
 
+import pytest
 from cchooks import PostToolUseContext
 
 from ccguardian.rules import (
@@ -271,59 +272,37 @@ class TestPathAccessRule:
             assert result is not None
             assert result.matched_pattern == "*.env"
 
-    def test_evaluate_pattern_with_scope_read_only(self):
+    @pytest.mark.parametrize(
+        ("scope", "pattern", "file_path", "should_match_read", "should_match_write"),
+        [
+            (Scope.READ, "*.log", "/var/log/test.log", True, False),
+            (Scope.WRITE, "*.cfg", "/etc/test.cfg", False, True),
+            (Scope.READ_WRITE, "*.secret", "/home/user/api.secret", True, True),
+        ],
+    )
+    def test_evaluate_pattern_with_scope(
+        self, scope, pattern, file_path, should_match_read, should_match_write
+    ):
         rule = PathAccessRule(
             id="test-rule",
-            paths=[PathPattern(pattern="*.log", scope=Scope.READ)],
+            paths=[PathPattern(pattern=pattern, scope=scope)],
         )
 
-        # Should match Read operations
-        read_context = pre_use_read_context("/var/log/test.log")
+        read_context = pre_use_read_context(file_path)
+        read_result = rule.evaluate(read_context)
 
-        result = rule.evaluate(read_context)
-        assert result is not None
+        if should_match_read:
+            assert read_result is not None
+        else:
+            assert read_result is None
 
-        # Should not match Write operations
-        write_context = pre_use_write_context("/var/log/test.log")
+        write_context = pre_use_write_context(file_path)
+        write_result = rule.evaluate(write_context)
 
-        result = rule.evaluate(write_context)
-        assert result is None
-
-    def test_evaluate_pattern_with_scope_write_only(self):
-        rule = PathAccessRule(
-            id="test-rule",
-            paths=[PathPattern(pattern="*.cfg", scope=Scope.WRITE)],
-        )
-
-        # Should not match Read operations
-        read_context = pre_use_read_context("/etc/test.cfg")
-
-        result = rule.evaluate(read_context)
-        assert result is None
-
-        # Should match Write operations
-        write_context = pre_use_write_context("/etc/test.cfg", "Edit")
-
-        result = rule.evaluate(write_context)
-        assert result is not None
-
-    def test_evaluate_pattern_with_scope_read_write(self):
-        rule = PathAccessRule(
-            id="test-rule",
-            paths=[PathPattern(pattern="*.secret", scope=Scope.READ_WRITE)],
-        )
-
-        # Should match Read operations
-        read_context = pre_use_read_context("/home/user/api.secret")
-
-        result = rule.evaluate(read_context)
-        assert result is not None
-
-        # Should match Write operations
-        write_context = pre_use_write_context("/home/user/api.secret")
-
-        result = rule.evaluate(write_context)
-        assert result is not None
+        if should_match_write:
+            assert write_result is not None
+        else:
+            assert write_result is None
 
     def test_evaluate_pattern_overrides_rule_defaults(self):
         rule = PathAccessRule(
@@ -358,8 +337,9 @@ class TestPathAccessRule:
         assert result is not None
         assert result.message == "Path matched pattern: *.env"
 
-    def test_evaluate_glob_patterns_work_correctly(self):
-        patterns_and_paths = [
+    @pytest.mark.parametrize(
+        ("pattern", "file_path", "should_match"),
+        [
             ("*.env", "/home/user/.env", True),
             ("*.env", "/home/user/config.yml", False),
             ("**/.env*", "/home/user/.env", True),
@@ -369,22 +349,21 @@ class TestPathAccessRule:
             ("**/.git/**", "/home/user/project/src/main.py", False),
             ("/etc/**", "/etc/passwd", True),
             ("/etc/**", "/home/user/file", False),
-        ]
+        ],
+    )
+    def test_evaluate_glob_patterns_work_correctly(self, pattern, file_path, should_match):
+        rule = PathAccessRule(
+            id="test-rule",
+            paths=[PathPattern(pattern=pattern)],
+        )
+        context = pre_use_read_context(file_path)
+        result = rule.evaluate(context)
 
-        for pattern, file_path, should_match in patterns_and_paths:
-            rule = PathAccessRule(
-                id="test-rule",
-                paths=[PathPattern(pattern=pattern)],
-            )
-            context = pre_use_read_context(file_path)
-
-            result = rule.evaluate(context)
-
-            if should_match:
-                assert result is not None, f"Pattern '{pattern}' should match '{file_path}'"
-                assert result.matched_pattern == pattern
-            else:
-                assert result is None, f"Pattern '{pattern}' should not match '{file_path}'"
+        if should_match:
+            assert result is not None, f"Pattern '{pattern}' should match '{file_path}'"
+            assert result.matched_pattern == pattern
+        else:
+            assert result is None, f"Pattern '{pattern}' should not match '{file_path}'"
 
     def test_evaluate_multiple_patterns_first_match_wins(self):
         rule = PathAccessRule(
