@@ -59,11 +59,11 @@ class Configuration:
         return len(self.rules)
 
     @property
-    def active_rules(self) -> int:
-        """Number of enabled rules."""
-        return sum(1 for rule in self.rules if rule.enabled)
+    def active_rules(self) -> list[Rule]:
+        """List of enabled rules."""
+        return [rule for rule in self.rules if rule.enabled]
 
     @property
-    def disabled_rules(self) -> int:
-        """Number of disabled rules."""
-        return self.total_rules - self.active_rules
+    def disabled_rules(self) -> list[Rule]:
+        """List of disabled rules."""
+        return [rule for rule in self.rules if not rule.enabled]

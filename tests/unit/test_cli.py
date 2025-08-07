@@ -51,7 +51,7 @@ class TestHookCommand:
         mock_safe_create_context.return_value = mock_pretool_context_non_bash
 
         mock_config = Mock()
-        mock_config.rules = []
+        mock_config.active_rules = []
         mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
@@ -68,7 +68,7 @@ class TestHookCommand:
         mock_safe_create_context.return_value = context
 
         mock_config = Mock()
-        mock_config.rules = []
+        mock_config.active_rules = []
         mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
@@ -98,7 +98,7 @@ class TestHookCommand:
             ],
         )
         mock_config = Mock()
-        mock_config.rules = [grep_rule]
+        mock_config.active_rules = [grep_rule]
         mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
@@ -126,7 +126,7 @@ class TestHookCommand:
             ],
         )
         mock_config = Mock()
-        mock_config.rules = [test_rule]
+        mock_config.active_rules = [test_rule]
         mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])
@@ -146,7 +146,7 @@ class TestHookCommand:
         mock_safe_create_context.return_value = post_tool_context
 
         mock_config = Mock()
-        mock_config.rules = []
+        mock_config.active_rules = []
         mock_config_manager.return_value.load_configuration.return_value = mock_config
 
         result = self.runner.invoke(hook, [])

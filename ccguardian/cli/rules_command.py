@@ -10,25 +10,6 @@ from ..rules import PathAccessRule, PreUseBashRule, Rule
 logger = logging.getLogger(__name__)
 
 
-def _get_active_rules(config_manager: ConfigurationManager) -> list[Rule]:
-    """
-    Get all active rules sorted by priority (highest first).
-
-    Args:
-        config_manager: ConfigurationManager instance
-
-    Returns:
-        List of active Rule objects sorted by priority (highest first)
-    """
-    config = config_manager.load_configuration()
-    active_rules = [rule for rule in config.rules if rule.enabled]
-
-    active_rules.sort(key=lambda rule: rule.priority, reverse=True)
-
-    logger.debug(f"Found {len(active_rules)} active rules")
-    return active_rules
-
-
 def _get_configuration_sources_display(config_manager: ConfigurationManager) -> list[str]:
     """
     Get configuration source paths formatted for CLI display.
@@ -104,7 +85,6 @@ def format_rules_output(config_manager: ConfigurationManager) -> str:
         Formatted string ready for CLI output
     """
     config = config_manager.load_configuration()
-    active_rules = _get_active_rules(config_manager)
     sources_display = _get_configuration_sources_display(config_manager)
 
     lines = []
@@ -127,24 +107,25 @@ def format_rules_output(config_manager: ConfigurationManager) -> str:
         lines.append("Default Rules: disabled")
 
     lines.append(f"Total Rules: {config.total_rules}")
-    lines.append(f"Active Rules: {config.active_rules} ({config.disabled_rules} disabled)")
+    lines.append(
+        f"Active Rules: {len(config.active_rules)} ({len(config.disabled_rules)} disabled)"
+    )
     lines.append("")
 
-    if active_rules:
+    if config.active_rules:
         lines.append("Rule Evaluation Order (by priority):")
         lines.append("=" * 35)
         lines.append("")
 
-        for rule in active_rules:
+        for rule in config.active_rules:
             lines.extend(format_rule(rule))
 
-    disabled_rules = [rule for rule in config.rules if not rule.enabled]
-    if disabled_rules:
+    if config.disabled_rules:
         lines.append("Disabled Rules:")
         lines.append("=" * 14)
         lines.append("")
 
-        for rule in disabled_rules:
+        for rule in config.disabled_rules:
             lines.append(f"ID: {rule.id} | Type: {rule.type}")
 
         lines.append("")

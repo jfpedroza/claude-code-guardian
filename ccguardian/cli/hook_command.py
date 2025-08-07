@@ -32,12 +32,9 @@ def hook():
         config_manager = ConfigurationManager()
         config = config_manager.load_configuration()
 
-        active_rules = [rule for rule in config.rules if rule.enabled]
-        active_rules.sort(key=lambda r: r.priority, reverse=True)
+        logger.debug(f"Evaluating {len(config.active_rules)} active rules")
 
-        logger.debug(f"Evaluating {len(active_rules)} active rules")
-
-        result = _evaluate_rules(context, active_rules)
+        result = _evaluate_rules(context, config.active_rules)
         match context:
             case PreToolUseContext():
                 if result and result.action == Action.DENY:

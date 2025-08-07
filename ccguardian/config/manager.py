@@ -32,7 +32,7 @@ class ConfigurationManager:
         config = self.merger.merge_configurations(raw_configs)
         logger.info(
             f"Configuration loaded: {config.total_rules} total rules, "
-            f"{config.active_rules} active, {config.disabled_rules} disabled"
+            f"{len(config.active_rules)} active, {len(config.disabled_rules)} disabled"
         )
 
         return config

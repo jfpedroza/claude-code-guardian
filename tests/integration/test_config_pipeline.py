@@ -244,7 +244,7 @@ class TestConfigurationManagerIntegration:
 
         # Should have rules from default configuration
         assert config.total_rules > 0
-        assert config.active_rules > 0
+        assert len(config.active_rules) > 0
         assert config.default_rules_enabled is True
 
         # Should have default source
