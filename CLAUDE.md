@@ -12,11 +12,27 @@ Currently in early development.
 
 ## Architecture
 
-### Current State
+### Package Structure
 
-- **CLI Entry Point**: `claude-code-guardian` command with `hook` subcommand
-- **Package Structure**: `ccguardian/` package with `cli.py` as main module
-- **Hook Integration**: Uses `cchooks>=0.1.2` library for Claude Code hook contexts
+The project follows a modular architecture:
+
+- **`ccguardian/cli/`**: CLI commands and entry points
+  - `main.py`: Primary CLI group with help system
+  - `hook_command.py`: Hook validation command for Claude Code integration
+  - `rules_command.py`: Rule management and display commands
+- **`ccguardian/config/`**: Configuration management system
+  - `types.py`: Core data classes (Configuration, Rule, SourceType)
+  - `manager.py`: Configuration loading and merging orchestration
+  - `loader.py`: YAML configuration file parsing
+  - `factory.py`: Configuration source discovery and creation
+  - `merger.py`: Multi-source configuration merging logic
+  - `default.yml`: Built-in default rules
+- **`ccguardian/rules.py`**: Rule definitions and validation logic
+
+### Hook Integration
+
+Uses cchooks library for Claude Code hook contexts. The system intercepts tool usage events
+and applies validation rules before execution.
 
 ## Development Commands
 
@@ -45,7 +61,7 @@ uv run claude-code-guardian hook
 ### Testing
 
 ```bash
-# Run all tests with coverage
+# Run all tests with coverage (default configuration)
 uv run pytest
 
 # Run tests without coverage  
@@ -53,7 +69,7 @@ uv run pytest --no-cov
 
 # Run specific test files
 uv run pytest tests/unit/test_cli.py
-uv run pytest tests/unit/test_validation_rules.py
+uv run pytest tests/unit/test_config_factory.py
 uv run pytest tests/integration/
 
 # Run tests with verbose output
@@ -62,6 +78,7 @@ uv run pytest -v
 # Test CLI functionality manually
 uv run claude-code-guardian  # Should show help and exit code 1
 uv run claude-code-guardian hook --help
+uv run claude-code-guardian rules
 
 # Test CLI as if installed with a built package
 uvx --no-cache --from /path/to/claude-code-guardian claude-code-guardian <args>
@@ -92,14 +109,29 @@ scripts/format.sh
 - **Package Name**: `claude-code-guardian` (CLI command name)
 - **Python Package**: `ccguardian` (internal package name)
 - **Python Version**: `>=3.12`
-- **Dependencies**: `cchooks>=0.1.2`, `click>=8.0.0`
+- **Dependencies**: `cchooks`, `click`, `PyYAML`
+- **Dev Dependencies**: `ruff`, `mypy`, `pytest`
 
-### Current Validation Rules
+### Configuration System
 
-Located in `ccguardian/cli.py` as `_VALIDATION_RULES`:
+The application supports a hierarchical configuration system with multiple sources:
 
-1. **grep optimization**: Suggests `rg` instead of `grep` for better performance
-2. **find optimization**: Suggests `rg --files | rg pattern` instead of `find -name`
+1. **Default rules**: Built-in rules from `ccguardian/config/default.yml`
+2. **User config**: `~/.config/claude-code-guardian/config.yml`
+3. **Shared config**: `/etc/claude-code-guardian/config.yml`
+4. **Local config**: `.claude-code-guardian.yml` in project root
+
+Configuration sources are merged with local taking highest priority. Each source can:
+
+- Enable/disable default rules
+- Define custom validation rules
+- Set rule priorities and patterns
+
+### Test Coverage Requirements
+
+- **Minimum Coverage**: 80% (enforced by pytest-cov)
+- **Coverage Reports**: Terminal, HTML (htmlcov/), and XML formats
+- **Branch Coverage**: Enabled for comprehensive testing
 
 ## Guidelines to follow at all times
 
