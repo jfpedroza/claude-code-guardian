@@ -164,6 +164,7 @@ class TestRulesCommandIntegration:
 
         assert "performance.grep_suggestion" in result.stdout
         assert "performance.find_suggestion" in result.stdout
+        assert "security.git_access" in result.stdout
 
         assert "Type: pre_use_bash" in result.stdout
         assert "Priority: 50" in result.stdout

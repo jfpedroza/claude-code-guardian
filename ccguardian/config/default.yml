@@ -19,3 +19,14 @@ rules:
     message: "Use 'rg --files | rg pattern' or 'rg --files -g pattern' instead of 'find -name' for better performance"
     priority: 50
     enabled: true
+
+  security.git_access:
+    type: path_access
+    scope: write
+    action: deny
+    message: "Direct access to .git directory is restricted for security"
+    priority: 50
+    paths:
+      - pattern: "**/.git"
+      - pattern: "**/.git/**"
+    enabled: true
