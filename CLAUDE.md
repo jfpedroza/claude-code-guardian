@@ -77,7 +77,7 @@ scripts/lint.sh
 scripts/format.sh
 ```
 
-**IMPORTANT**: Always run format.sh after making code changes
+**REQUIRED**: After editing code files, IMMEDIATELY run `scripts/format.sh` before proceeding
 
 **Test Structure:**
 
