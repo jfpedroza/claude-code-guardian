@@ -16,12 +16,10 @@ def pre_use_context(tool_name: str, **tool_input) -> Mock:
 
 
 def pre_use_bash_context(command: str) -> Mock:
-    """Create a mock PreToolUseContext for Bash tool with given command."""
     return pre_use_context("Bash", command=command)
 
 
 def pre_use_read_context(file_path: str) -> Mock:
-    """Create a mock PreToolUseContext for Read tool with given file path."""
     return pre_use_context("Read", file_path=file_path)
 
 

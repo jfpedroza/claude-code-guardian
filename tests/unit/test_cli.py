@@ -12,14 +12,10 @@ from tests.utils import post_use_write_context, pre_use_bash_context
 
 
 class TestCLI:
-    """Test CLI command functionality."""
-
     def setup_method(self):
-        """Set up test environment."""
         self.runner = CliRunner()
 
     def test_main_no_args_shows_help_and_exits_1(self):
-        """Test that running CLI with no args shows help and exits with code 1."""
         result = self.runner.invoke(main, [])
 
         assert result.exit_code == 1
@@ -29,7 +25,6 @@ class TestCLI:
         assert "hook" in result.output
 
     def test_main_help_flag(self):
-        """Test that -h and --help flags work."""
         result_h = self.runner.invoke(main, ["-h"])
         result_help = self.runner.invoke(main, ["--help"])
 
@@ -40,14 +35,10 @@ class TestCLI:
 
 
 class TestHookCommand:
-    """Test hook CLI command."""
-
     def setup_method(self):
-        """Set up test environment."""
         self.runner = CliRunner()
 
     def test_hook_help(self):
-        """Test hook command help."""
         result = self.runner.invoke(main, ["hook", "--help"])
 
         assert result.exit_code == 0
@@ -66,7 +57,6 @@ class TestHookCommand:
 
         result = self.runner.invoke(hook, [])
 
-        # Should complete without error
         assert result.exit_code == 0
         mock_pretool_context_non_bash.output.exit_success.assert_called_once()
 

@@ -8,8 +8,6 @@ from pathlib import Path
 
 
 class TestCLIIntegration:
-    """Test real CLI integration via subprocess."""
-
     def test_cli_no_args_exit_code(self):
         result = subprocess.run(
             [sys.executable, "-m", "ccguardian.cli"],
@@ -24,10 +22,7 @@ class TestCLIIntegration:
 
 
 class TestHookCommandIntegration:
-    """Test real hook integration via subprocess with JSON input."""
-
     def test_hook_command_via_subprocess_grep_denial(self):
-        """Test hook command via subprocess with grep command denial."""
         hook_input = {
             "session_id": "test123",
             "transcript_path": "/tmp/test.jsonl",
@@ -44,13 +39,11 @@ class TestHookCommandIntegration:
             text=True,
         )
 
-        # Hook should complete successfully (exit code 0)
         assert result.returncode == 0
         assert "rg" in result.stdout
         assert result.stderr == ""
 
     def test_hook_command_via_subprocess_safe_command(self):
-        """Test hook command via subprocess with safe command that passes."""
         hook_input = {
             "session_id": "test123",
             "transcript_path": "/tmp/test.jsonl",
@@ -68,7 +61,6 @@ class TestHookCommandIntegration:
         )
 
         assert result.returncode == 0
-        # Should not output denial messages
         assert "rg" not in result.stdout
         assert result.stderr == ""
 
