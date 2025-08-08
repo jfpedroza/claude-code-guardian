@@ -3,17 +3,23 @@
 import logging
 
 import click
-from cchooks import PreToolUseContext, exit_non_block, exit_success, safe_create_context
+from cchooks import (
+    HookContext,
+    PreToolUseContext,
+    exit_non_block,
+    exit_success,
+    safe_create_context,
+)
 
 from ..config import ConfigValidationError
 from ..config.manager import ConfigurationManager
-from ..rules import Action, Context, RuleResult
+from ..rules import Action, RuleResult
 from ..utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
 
-def _evaluate_rules(context: Context, rules: list) -> RuleResult | None:
+def _evaluate_rules(context: HookContext, rules: list) -> RuleResult | None:
     """Evaluate all rules against the context and return first matching result."""
     for rule in rules:
         result = rule.evaluate(context)

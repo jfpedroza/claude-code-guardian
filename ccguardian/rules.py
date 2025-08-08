@@ -5,11 +5,9 @@ from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
 
-from cchooks import BaseHookContext, PostToolUseContext, PreToolUseContext
+from cchooks import HookContext, PostToolUseContext, PreToolUseContext
 
 DEFAULT_PRIORITY = 50
-
-type Context = BaseHookContext
 
 
 class Action(Enum):
@@ -70,10 +68,10 @@ class Rule(ABC):
         self.message = message
 
     @abstractmethod
-    def evaluate(self, context: Context) -> RuleResult | None:
+    def evaluate(self, context: HookContext) -> RuleResult | None:
         pass
 
-    def pre_evaluate(self, context: Context) -> bool:
+    def pre_evaluate(self, context: HookContext) -> bool:
         if not self.enabled:
             return False
 
@@ -106,7 +104,7 @@ class PreUseBashRule(Rule):
         super().__init__(id, enabled, priority, action or self.default_action, message)
         self.commands = commands or []
 
-    def evaluate(self, context: Context) -> RuleResult | None:
+    def evaluate(self, context: HookContext) -> RuleResult | None:
         if not self.pre_evaluate(context):
             return None
 
@@ -157,7 +155,7 @@ class PathAccessRule(Rule):
         self.paths = paths or []
         self.scope = scope or self.default_scope
 
-    def evaluate(self, context: Context) -> RuleResult | None:
+    def evaluate(self, context: HookContext) -> RuleResult | None:
         if not self.pre_evaluate(context):
             return None
 
