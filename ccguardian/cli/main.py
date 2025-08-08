@@ -4,6 +4,7 @@ import sys
 
 import click
 
+from ..utils import setup_logging
 from .hook_command import hook
 from .rules_command import rules
 
@@ -13,6 +14,8 @@ from .rules_command import rules
 @click.help_option("-h", "--help")
 def main(ctx):
     """Claude Code Guardian - Validation rules for tool usage and file access for Claude Code."""
+    setup_logging()
+
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         sys.exit(1)

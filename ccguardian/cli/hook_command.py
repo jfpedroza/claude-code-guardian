@@ -8,6 +8,7 @@ from cchooks import PreToolUseContext, exit_non_block, exit_success, safe_create
 from ..config import ConfigValidationError
 from ..config.manager import ConfigurationManager
 from ..rules import Action, Context, RuleResult
+from ..utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,15 @@ def _evaluate_rules(context: Context, rules: list) -> RuleResult | None:
 
 
 @click.command()
-def hook():
-    """Claude Code hook entry point - validates tool usage using configuration rules."""
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose (debug) logging")
+@click.help_option("-h", "--help")
+def hook(verbose):
+    """Claude Code hook entry point - set in CC settings.json."""
+    if verbose:
+        setup_logging("DEBUG")
+
+    logger.info("Executing hook command")
+
     context = None
     try:
         context = safe_create_context()

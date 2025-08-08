@@ -7,6 +7,7 @@ import click
 from ..config import ConfigValidationError
 from ..config.manager import ConfigurationManager
 from ..rules import PathAccessRule, PreUseBashRule, Rule
+from ..utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -135,9 +136,15 @@ def format_rules_output(config_manager: ConfigurationManager) -> str:
 
 
 @click.command()
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose (debug) logging")
 @click.help_option("-h", "--help")
-def rules() -> None:
+def rules(verbose) -> None:
     """Display configuration diagnostics and rule information."""
+    if verbose:
+        setup_logging("DEBUG")
+
+    logger.info("Executing rules command")
+
     try:
         config_manager = ConfigurationManager()
         output = format_rules_output(config_manager)
