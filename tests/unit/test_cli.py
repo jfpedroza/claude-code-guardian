@@ -10,8 +10,7 @@ from click.testing import CliRunner
 from ccguardian.cli import main
 from ccguardian.cli.hook_command import hook
 from ccguardian.cli.rules_command import rules
-from ccguardian.rules import Action, CommandPattern, PreUseBashRule
-from tests.utils import post_use_write_context, pre_use_bash_context
+from tests.utils import pre_use_bash_context
 
 
 class TestCLI:
@@ -46,135 +45,29 @@ class TestHookCommand:
         assert result.exit_code == 0
         assert "Claude Code hook entry point" in result.output
 
-    @patch("ccguardian.cli.hook_command.ConfigurationManager")
-    @patch("ccguardian.cli.hook_command.safe_create_context")
-    def test_hook_non_bash_tool_exits_success(
-        self, mock_safe_create_context, mock_config_manager, mock_pretool_context_non_bash
-    ):
-        mock_safe_create_context.return_value = mock_pretool_context_non_bash
-
-        mock_config = Mock()
-        mock_config.active_rules = []
-        mock_config_manager.return_value.load_configuration.return_value = mock_config
-
-        result = self.runner.invoke(hook, [])
-
-        assert result.exit_code == 0
-        mock_pretool_context_non_bash.output.exit_success.assert_called_once()
-
-    @patch("ccguardian.cli.hook_command.ConfigurationManager")
-    @patch("ccguardian.cli.hook_command.safe_create_context")
-    def test_hook_no_matching_rules_exits_success(
-        self, mock_safe_create_context, mock_config_manager
-    ):
+    @patch("ccguardian.cli.hook_command.Engine")
+    @patch("ccguardian.cli.hook_command.create_context")
+    def test_hook_runs_engine(self, mock_create_context, mock_engine):
         context = pre_use_bash_context("ls -la")
-        mock_safe_create_context.return_value = context
-
-        mock_config = Mock()
-        mock_config.active_rules = []
-        mock_config_manager.return_value.load_configuration.return_value = mock_config
+        mock_create_context.return_value = context
+        mock_engine_instance = Mock()
+        mock_engine.return_value = mock_engine_instance
 
         result = self.runner.invoke(hook, [])
 
         assert result.exit_code == 0
-        context.output.deny.assert_not_called()
-        context.output.exit_success.assert_called_once()
+        mock_engine.assert_called_once_with(context)
+        mock_engine_instance.run.assert_called_once()
 
-    @patch("ccguardian.cli.hook_command.ConfigurationManager")
-    @patch("ccguardian.cli.hook_command.safe_create_context")
-    def test_hook_valid_command_with_rules_exits_success(
-        self, mock_safe_create_context, mock_config_manager
-    ):
-        context = pre_use_bash_context("ls -la")
-        mock_safe_create_context.return_value = context
-
-        grep_rule = PreUseBashRule(
-            id="performance.grep_suggestion",
-            enabled=True,
-            priority=50,
-            commands=[
-                CommandPattern(
-                    pattern=r"^grep\b(?!.*\|)",
-                    action=Action.DENY,
-                    message="Use 'rg' instead",
-                )
-            ],
-        )
-        mock_config = Mock()
-        mock_config.active_rules = [grep_rule]
-        mock_config_manager.return_value.load_configuration.return_value = mock_config
+    @patch("ccguardian.cli.hook_command.handle_context_error")
+    @patch("ccguardian.cli.hook_command.create_context")
+    def test_hook_exception_handling(self, mock_create_context, mock_handle_context_error):
+        mock_create_context.side_effect = Exception("Context creation failed")
 
         result = self.runner.invoke(hook, [])
 
         assert result.exit_code == 0
-        context.output.deny.assert_not_called()
-        context.output.exit_success.assert_called_once()
-
-    @patch("ccguardian.cli.hook_command.ConfigurationManager")
-    @patch("ccguardian.cli.hook_command.safe_create_context")
-    def test_hook_command_matching_deny_rule(self, mock_safe_create_context, mock_config_manager):
-        context = pre_use_bash_context("test_command arg")
-        mock_safe_create_context.return_value = context
-
-        test_rule = PreUseBashRule(
-            id="test.deny_rule",
-            enabled=True,
-            priority=50,
-            commands=[
-                CommandPattern(
-                    pattern=r"^test_command\b",
-                    action=Action.DENY,
-                    message="Custom denial message for testing",
-                )
-            ],
-        )
-        mock_config = Mock()
-        mock_config.active_rules = [test_rule]
-        mock_config_manager.return_value.load_configuration.return_value = mock_config
-
-        result = self.runner.invoke(hook, [])
-
-        assert result.exit_code == 0
-        context.output.deny.assert_called_once()
-        call_args = context.output.deny.call_args[0][0]
-        assert "Custom denial message for testing" in call_args
-
-    @patch("ccguardian.cli.hook_command.exit_success")
-    @patch("ccguardian.cli.hook_command.ConfigurationManager")
-    @patch("ccguardian.cli.hook_command.safe_create_context")
-    def test_hook_non_pretooluse_context_does_nothing(
-        self, mock_safe_create_context, mock_config_manager, mock_exit_success
-    ):
-        post_tool_context = post_use_write_context("/tmp/test.txt", "test content")
-        mock_safe_create_context.return_value = post_tool_context
-
-        mock_config = Mock()
-        mock_config.active_rules = []
-        mock_config_manager.return_value.load_configuration.return_value = mock_config
-
-        result = self.runner.invoke(hook, [])
-
-        assert result.exit_code == 0
-        mock_exit_success.assert_called_once()
-
-    @patch("ccguardian.cli.hook_command.exit_non_block")
-    @patch("ccguardian.cli.hook_command.ConfigurationManager")
-    @patch("ccguardian.cli.hook_command.safe_create_context")
-    def test_hook_exception_handling(
-        self, mock_safe_create_context, mock_config_manager, mock_exit_non_block
-    ):
-        test_context = pre_use_bash_context("test command")
-        mock_safe_create_context.return_value = test_context
-
-        mock_config_manager.side_effect = Exception("Configuration loading failed")
-
-        result = self.runner.invoke(hook, [])
-
-        assert result.exit_code == 0
-        mock_exit_non_block.assert_called_once()
-        call_args = mock_exit_non_block.call_args[0][0]
-        assert "Claude Code Guardian hook failed:" in call_args
-        assert "Configuration loading failed" in call_args
+        mock_handle_context_error.assert_called_once()
 
 
 class TestRulesCommand:

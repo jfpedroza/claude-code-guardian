@@ -39,14 +39,13 @@ class TestCLIIntegration:
 
 
 class TestHookCommandIntegration:
-    def test_hook_command_via_subprocess_grep_denial(self):
+    def test_hook_command_via_subprocess_session_start(self):
         hook_input = {
             "session_id": "test123",
             "transcript_path": "/tmp/test.jsonl",
             "cwd": str(Path.cwd()),
-            "hook_event_name": "PreToolUse",
-            "tool_name": "Bash",
-            "tool_input": {"command": "grep pattern file.txt"},
+            "hook_event_name": "SessionStart",
+            "source": "resume",
         }
 
         result = subprocess.run(
@@ -58,10 +57,32 @@ class TestHookCommandIntegration:
         )
 
         assert result.returncode == 0
-        assert "rg" in result.stdout
+        assert result.stdout == ""
         assert result.stderr == ""
 
-    def test_hook_command_via_subprocess_safe_command(self):
+    def test_hook_command_via_subprocess_matching_rule(self):
+        hook_input = {
+            "session_id": "test123",
+            "transcript_path": "/tmp/test.jsonl",
+            "cwd": str(Path.cwd()),
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Write",
+            "tool_input": {"file_path": "/path/to/.git/file", "content": "something"},
+        }
+
+        result = subprocess.run(
+            [sys.executable, "-m", "ccguardian.cli", "hook"],
+            input=json.dumps(hook_input),
+            capture_output=True,
+            text=True,
+            env=_get_clean_env(),
+        )
+
+        assert result.returncode == 0
+        assert "Action denied. Rule security.git_access matched" in result.stdout
+        assert result.stderr == ""
+
+    def test_hook_command_via_subprocess_no_matching_rule(self):
         hook_input = {
             "session_id": "test123",
             "transcript_path": "/tmp/test.jsonl",
@@ -80,7 +101,7 @@ class TestHookCommandIntegration:
         )
 
         assert result.returncode == 0
-        assert "rg" not in result.stdout
+        assert result.stdout == ""
         assert result.stderr == ""
 
     def test_hook_command_with_custom_configuration(self):
@@ -91,10 +112,19 @@ rules:
   test.custom_rule:
     type: pre_use_bash
     pattern: "^echo.*test"
-    action: deny
+    action: warn
     message: "Custom test rule triggered"
     priority: 10
     enabled: true
+
+  test.file_access:
+    type: path_access
+    pattern: "*.test"
+    scope: read
+    action: allow
+    message: "Access to .test file"
+    priority: 20
+    enabled: false
 """
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -124,9 +154,10 @@ rules:
                 env=env,
             )
 
-            assert result.returncode == 0
-            assert "Custom test rule triggered" in result.stdout
-            assert result.stderr == ""
+            assert result.returncode == 1
+            assert "Warning" in result.stderr
+            assert "Custom test rule triggered" in result.stderr
+            assert result.stdout == ""
 
             # Test hook with command that doesn't match (should pass)
             hook_input["tool_input"]["command"] = "ls -la"
@@ -140,8 +171,7 @@ rules:
             )
 
             assert result.returncode == 0
-            assert "Custom test rule triggered" not in result.stdout
-            assert "rg" not in result.stdout
+            assert result.stdout == ""
             assert result.stderr == ""
 
 
@@ -166,6 +196,7 @@ class TestRulesCommandIntegration:
         assert "performance.grep_suggestion" in result.stdout
         assert "performance.find_suggestion" in result.stdout
         assert "security.git_access" in result.stdout
+        assert "security.git_commands" in result.stdout
 
         assert "Type: pre_use_bash" in result.stdout
         assert "Priority: 50" in result.stdout

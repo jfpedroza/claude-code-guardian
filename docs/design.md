@@ -98,7 +98,7 @@ rules:
     type: pre_use_bash
     pattern: "^grep\\b(?!.*\\|)"
     message: "Use ripgrep for better performance"
-    action: suggest
+    action: deny
     priority: 10
     enabled: true
 
@@ -195,12 +195,11 @@ rules:
 #### Action Types
 
 - **`allow`**: Permit operation silently
-- **`suggest`**: Show alternative but allow operation
 - **`warn`**: Show warning but allow operation
 - **`ask`**: Require user confirmation
 - **`deny`**: Block operation completely
 - **`halt`**: Stop all processing
-- **`continue`**: Do nothing, proceed with next rule
+- **`continue`**: Do nothing, let Claude's default permission system run
 
 #### Scope Types (path_access only)
 
@@ -250,7 +249,7 @@ performance.suggestions:
   type: pre_use_bash
   pattern: "^grep\\b(?!.*\\|)"
   message: "Use ripgrep for better performance"
-  action: suggest
+  action: deny
   priority: 10
   enabled: true
 ```
@@ -407,7 +406,7 @@ Paths:
 
 ID: performance.suggestions | Type: pre_use_bash | Priority: 20
 Commands:
-- `^grep\\b(?!.*\\|)` (action: suggest)
+- `^grep\\b(?!.*\\|)` (action: deny)
 
 Disabled Rules:
 ==============
@@ -449,7 +448,7 @@ claude-code-guardian hook
 - Detects hook type automatically using cchooks `create_context()`
 - Loads and merges configuration from all sources
 - Evaluates applicable rules
-- Returns appropriate response (allow/deny/warn/suggest/ask/halt/continue)
+- Returns appropriate response (allow/deny/warn/ask/halt/continue)
 - Logs rule execution for audit and debugging
 
 **Hook Configuration Setup:**

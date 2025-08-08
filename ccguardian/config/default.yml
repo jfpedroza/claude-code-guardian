@@ -30,3 +30,12 @@ rules:
       - pattern: "**/.git"
       - pattern: "**/.git/**"
     enabled: true
+
+  security.git_commands:
+    type: pre_use_bash
+    priority: 50
+    commands:
+      - pattern: "^git push --force\\b"
+        message: "Use git push --force-with-lease"
+        action: deny
+    enabled: true

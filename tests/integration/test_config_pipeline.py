@@ -54,7 +54,7 @@ class TestConfigurationPipeline:
                     "performance.grep_suggestion": {
                         "type": "pre_use_bash",
                         "pattern": r"^grep\b(?!.*\|)",
-                        "action": "suggest",
+                        "action": "deny",
                         "message": "Use 'rg' (ripgrep) instead of 'grep'",
                         "priority": 50,
                         "enabled": True,
@@ -62,7 +62,7 @@ class TestConfigurationPipeline:
                     "performance.find_suggestion": {
                         "type": "pre_use_bash",
                         "pattern": r"^find\s+\S+\s+-name\b",
-                        "action": "suggest",
+                        "action": "warn",
                         "message": "Use 'rg --files | rg pattern' for better performance",
                         "priority": 50,
                         "enabled": True,

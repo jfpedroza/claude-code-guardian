@@ -77,7 +77,7 @@ class TestPreUseBashRule:
     def test_evaluate_pattern_match_with_rule_defaults(self):
         rule = PreUseBashRule(
             id="test-rule",
-            action=Action.SUGGEST,
+            action=Action.DENY,
             message="Use rg instead",
             commands=[CommandPattern(pattern=r"^grep\b")],
         )
@@ -87,14 +87,14 @@ class TestPreUseBashRule:
 
         assert result is not None
         assert result.rule_id == "test-rule"
-        assert result.action == Action.SUGGEST
+        assert result.action == Action.DENY
         assert result.message == "Use rg instead"
         assert result.matched_pattern == r"^grep\b"
 
     def test_evaluate_pattern_match_with_pattern_overrides(self):
         rule = PreUseBashRule(
             id="test-rule",
-            action=Action.SUGGEST,
+            action=Action.ASK,
             message="Default message",
             commands=[
                 CommandPattern(
@@ -115,7 +115,7 @@ class TestPreUseBashRule:
     def test_evaluate_pattern_match_with_fallback_message(self):
         rule = PreUseBashRule(
             id="test-rule",
-            action=Action.SUGGEST,
+            action=Action.ALLOW,
             # No rule message
             commands=[
                 CommandPattern(pattern=r"^grep\b")
@@ -128,7 +128,7 @@ class TestPreUseBashRule:
 
         assert result is not None
         assert result.rule_id == "test-rule"
-        assert result.action == Action.SUGGEST
+        assert result.action == Action.ALLOW
         assert result.message == r"Command matched pattern: ^grep\b"
         assert result.matched_pattern == r"^grep\b"
 
@@ -136,7 +136,7 @@ class TestPreUseBashRule:
         rule = PreUseBashRule(
             id="test-rule",
             commands=[
-                CommandPattern(pattern=r"^grep", action=Action.SUGGEST, message="First pattern"),
+                CommandPattern(pattern=r"^grep", action=Action.ASK, message="First pattern"),
                 CommandPattern(
                     pattern=r"grep.*test", action=Action.DENY, message="Second pattern"
                 ),
@@ -147,7 +147,7 @@ class TestPreUseBashRule:
         result = rule.evaluate(context)
 
         assert result is not None
-        assert result.action == Action.SUGGEST
+        assert result.action == Action.ASK
         assert result.message == "First pattern"
         assert result.matched_pattern == r"^grep"
 

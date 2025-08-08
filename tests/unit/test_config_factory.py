@@ -20,7 +20,7 @@ class TestRuleFactory:
         config = {
             "type": "pre_use_bash",
             "pattern": r"^grep\b(?!.*\|)",
-            "action": "suggest",
+            "action": "deny",
             "message": "Use ripgrep instead",
             "priority": DEFAULT_PRIORITY,
             "enabled": True,
@@ -32,7 +32,7 @@ class TestRuleFactory:
         assert rule.id == "test.rule"
         assert rule.enabled is True
         assert rule.priority == DEFAULT_PRIORITY
-        assert rule.action == Action.SUGGEST
+        assert rule.action == Action.DENY
         assert rule.message == "Use ripgrep instead"
         assert len(rule.commands) == 1
         assert rule.commands[0].pattern == r"^grep\b(?!.*\|)"
@@ -195,7 +195,7 @@ class TestRuleFactory:
         [
             ("allow", Action.ALLOW),
             ("DENY", Action.DENY),  # Case insensitive
-            ("suggest", Action.SUGGEST),
+            ("ask", Action.ASK),
             (Action.WARN, Action.WARN),  # Already enum
         ],
     )
@@ -281,7 +281,7 @@ class TestRuleFactory:
             "performance.grep": {
                 "type": "pre_use_bash",
                 "pattern": "grep",
-                "action": "suggest",
+                "action": "deny",
                 "priority": DEFAULT_PRIORITY,
             },
             "security.env_files": {

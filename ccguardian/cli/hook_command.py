@@ -5,27 +5,29 @@ import logging
 import click
 from cchooks import (
     HookContext,
+    PostToolUseContext,
+    PreCompactContext,
     PreToolUseContext,
-    exit_non_block,
-    exit_success,
-    safe_create_context,
+    SessionStartContext,
+    create_context,
+    handle_context_error,
 )
 
-from ..config import ConfigurationManager, ConfigValidationError
-from ..rules import Action, RuleResult
+from ccguardian.engine import Engine
+
 from ..utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
 
-def _evaluate_rules(context: HookContext, rules: list) -> RuleResult | None:
-    """Evaluate all rules against the context and return first matching result."""
-    for rule in rules:
-        result = rule.evaluate(context)
-        if result:
-            logger.debug(f"Rule {rule.id} matched: {result.action.value} - {result.message}")
-            return result
-    return None
+def _context_suffix(context: HookContext) -> str | None:
+    match context:
+        case PreToolUseContext() | PostToolUseContext():
+            return context.tool_name
+        case PreCompactContext():
+            return context.trigger
+        case SessionStartContext():
+            return context.source
 
 
 @click.command()
@@ -36,34 +38,19 @@ def hook(verbose):
     if verbose:
         setup_logging("DEBUG")
 
-    logger.info("Executing hook command")
-
-    context = None
     try:
-        context = safe_create_context()
-        logger.debug(f"Created hook context: {type(context).__name__}")
+        context = create_context()
+        context_suffix = _context_suffix(context)
+        if context_suffix:
+            hook_name = f"{context.hook_event_name}:{context_suffix}"
+        else:
+            hook_name = context.hook_event_name
 
-        config_manager = ConfigurationManager()
-        config = config_manager.load_configuration()
+        logger.info(f"Executing hook for {hook_name}. Session ID: {context.session_id}")
+        logger.debug(f"Hook input data: {context._input_data}")
 
-        logger.debug(f"Evaluating {len(config.active_rules)} active rules")
-
-        result = _evaluate_rules(context, config.active_rules)
-        match context:
-            case PreToolUseContext():
-                if result and result.action == Action.DENY:
-                    logger.info(f"Denying tool use: {result.message}")
-                    context.output.deny(result.message)
-                else:
-                    logger.debug("Allowing tool use")
-                    context.output.exit_success()
-            case _:
-                logger.warning(f"Unsupported context type: {type(context).__name__}")
-                exit_success()
-
-    except ConfigValidationError as e:
-        logger.error(f"Configuration validation failed: {e}")
-        exit_non_block(f"Claude Code Guardian configuration error: {e}")
+        engine = Engine(context)
+        engine.run()
     except Exception as e:
-        logger.error(f"Hook execution failed: {e}", exc_info=True)
-        exit_non_block(f"Claude Code Guardian hook failed: {e}")
+        logger.error(f"Hook context creation failed: {e}", exc_info=True)
+        handle_context_error(e)

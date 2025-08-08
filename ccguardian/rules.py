@@ -12,7 +12,6 @@ DEFAULT_PRIORITY = 50
 
 class Action(Enum):
     ALLOW = "allow"
-    SUGGEST = "suggest"
     WARN = "warn"
     ASK = "ask"
     DENY = "deny"

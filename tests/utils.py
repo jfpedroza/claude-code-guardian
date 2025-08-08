@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import yaml
-from cchooks import PostToolUseContext, PreToolUseContext
+from cchooks import PostToolUseContext, PreToolUseContext, SessionStartContext
 
 
 def pre_use_context(tool_name: str, **tool_input) -> Mock:
@@ -15,6 +15,8 @@ def pre_use_context(tool_name: str, **tool_input) -> Mock:
     context.output = Mock()
     context.output.exit_success = Mock()
     context.output.deny = Mock()
+    context.session_id = "test-session-123"
+    context._input_data = {"tool_name": tool_name, "tool_input": tool_input}
     return context
 
 
@@ -38,6 +40,12 @@ def post_use_context(tool_name: str, tool_input: dict, tool_response: dict) -> M
     context.tool_response = tool_response
     context.output = Mock()
     context.output.exit_success = Mock()
+    context.session_id = "test-session-123"
+    context._input_data = {
+        "tool_name": tool_name,
+        "tool_input": tool_input,
+        "tool_response": tool_response,
+    }
     return context
 
 
@@ -49,6 +57,15 @@ def post_use_write_context(
         tool_input={"file_path": file_path, "content": content},
         tool_response={"filePath": file_path, "success": success},
     )
+
+
+def session_start_context(source: str = "startup") -> Mock:
+    context = Mock(spec=SessionStartContext)
+    context.hook_event_name = "SessionStart"
+    context.source = source
+    context.session_id = "test-session-123"
+    context._input_data = {"source": source}
+    return context
 
 
 def create_yaml_config(config_dir: Path, filename: str, config_data: dict) -> Path:
