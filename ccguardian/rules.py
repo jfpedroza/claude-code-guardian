@@ -1,11 +1,11 @@
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from fnmatch import fnmatch
 from pathlib import Path
 
-from cchooks import BaseHookContext, PreToolUseContext
+from cchooks import BaseHookContext, PostToolUseContext, PreToolUseContext
 
 DEFAULT_PRIORITY = 50
 
@@ -51,34 +51,66 @@ class PathPattern:
     message: str | None = None
 
 
-@dataclass
 class Rule(ABC):
-    id: str
-    enabled: bool = True
-    priority: int = DEFAULT_PRIORITY
-    action: Action = Action.CONTINUE
-    message: str | None = None
+    hook_map: dict[str, set[str]]
+    type: str
+
+    def __init__(
+        self,
+        id: str,
+        enabled: bool,
+        priority: int,
+        action: Action,
+        message: str | None,
+    ):
+        self.id = id
+        self.enabled = enabled
+        self.priority = priority
+        self.action = action
+        self.message = message
 
     @abstractmethod
     def evaluate(self, context: Context) -> RuleResult | None:
         pass
 
+    def pre_evaluate(self, context: Context) -> bool:
+        if not self.enabled:
+            return False
 
-@dataclass
+        hook_map = self.__class__.hook_map
+
+        if context.hook_event_name not in hook_map:
+            return False
+
+        match context:
+            case PreToolUseContext() | PostToolUseContext():
+                return context.tool_name in hook_map[context.hook_event_name]
+
+        return False
+
+
 class PreUseBashRule(Rule):
-    type: str = "pre_use_bash"
-    commands: list[CommandPattern] = field(default_factory=list)
-    action: Action = Action.CONTINUE
+    type = "pre_use_bash"
+    hook_map = {"PreToolUse": {"Bash"}}
+    default_action = Action.CONTINUE
+
+    def __init__(
+        self,
+        id: str,
+        commands: list[CommandPattern] | None = None,
+        enabled: bool = True,
+        priority: int = DEFAULT_PRIORITY,
+        action: Action | None = None,
+        message: str | None = None,
+    ):
+        super().__init__(id, enabled, priority, action or self.default_action, message)
+        self.commands = commands or []
 
     def evaluate(self, context: Context) -> RuleResult | None:
-        if not self.enabled:
+        if not self.pre_evaluate(context):
             return None
 
-        if not isinstance(context, PreToolUseContext):
-            return None
-
-        if context.tool_name != "Bash":
-            return None
+        assert isinstance(context, PreToolUseContext)
 
         command = context.tool_input.get("command")
         if not command:
@@ -103,22 +135,33 @@ class PreUseBashRule(Rule):
         return None
 
 
-@dataclass
 class PathAccessRule(Rule):
-    type: str = "path_access"
-    paths: list[PathPattern] = field(default_factory=list)
-    scope: Scope = Scope.READ_WRITE
-    action: Action = Action.DENY
+    type = "path_access"
+    hook_map = {"PreToolUse": {"Read", "Edit", "MultiEdit", "Write"}}
+    default_action = Action.DENY
+    default_scope = Scope.READ_WRITE
+
+    def __init__(
+        self,
+        id: str,
+        paths: list[PathPattern] | None = None,
+        scope: Scope | None = None,
+        enabled: bool = True,
+        priority: int | None = None,
+        action: Action | None = None,
+        message: str | None = None,
+    ):
+        super().__init__(
+            id, enabled, priority or DEFAULT_PRIORITY, action or self.default_action, message
+        )
+        self.paths = paths or []
+        self.scope = scope or self.default_scope
 
     def evaluate(self, context: Context) -> RuleResult | None:
-        if not self.enabled:
+        if not self.pre_evaluate(context):
             return None
 
-        if not isinstance(context, PreToolUseContext):
-            return None
-
-        if context.tool_name not in {"Read", "Edit", "MultiEdit", "Write"}:
-            return None
+        assert isinstance(context, PreToolUseContext)
 
         file_path = context.tool_input.get("file_path")
         if not file_path:
@@ -167,3 +210,9 @@ class PathAccessRule(Rule):
         if pattern_scope == Scope.READ_WRITE:
             return True
         return pattern_scope == operation_scope
+
+
+RULE_TYPES: dict[str, type[Rule]] = {
+    "pre_use_bash": PreUseBashRule,
+    "path_access": PathAccessRule,
+}

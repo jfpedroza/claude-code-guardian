@@ -9,6 +9,7 @@ from cchooks import PostToolUseContext, PreToolUseContext
 
 def pre_use_context(tool_name: str, **tool_input) -> Mock:
     context = Mock(spec=PreToolUseContext)
+    context.hook_event_name = "PreToolUse"
     context.tool_name = tool_name
     context.tool_input = tool_input
     context.output = Mock()
@@ -31,6 +32,7 @@ def pre_use_write_context(file_path: str, tool_name: str = "Write") -> Mock:
 
 def post_use_context(tool_name: str, tool_input: dict, tool_response: dict) -> Mock:
     context = Mock(spec=PostToolUseContext)
+    context.hook_event_name = "PostToolUse"
     context.tool_name = tool_name
     context.tool_input = tool_input
     context.tool_response = tool_response

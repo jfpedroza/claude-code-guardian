@@ -6,6 +6,7 @@ from typing import Any
 
 from ..rules import (
     DEFAULT_PRIORITY,
+    RULE_TYPES,
     Action,
     CommandPattern,
     PathAccessRule,
@@ -21,13 +22,6 @@ logger = logging.getLogger(__name__)
 
 class RuleFactory:
     """Factory for creating Rule objects from configuration data."""
-
-    def __init__(self):
-        """Initialize the rule factory with type registration."""
-        self._rule_types: dict[str, type[Rule]] = {
-            "pre_use_bash": PreUseBashRule,
-            "path_access": PathAccessRule,
-        }
 
     def create_rule(self, rule_id: str, rule_config: dict[str, Any]) -> Rule:
         """
@@ -47,15 +41,15 @@ class RuleFactory:
         if not rule_type:
             raise ConfigValidationError("Rule is missing required 'type' field", rule_id=rule_id)
 
-        if rule_type not in self._rule_types:
-            valid_types = ", ".join(self._rule_types.keys())
+        if rule_type not in RULE_TYPES:
+            valid_types = ", ".join(RULE_TYPES.keys())
             raise ConfigValidationError(
                 f"Unknown rule type '{rule_type}'. Valid types: {valid_types}", rule_id=rule_id
             )
 
-        if rule_type == "pre_use_bash":
+        if rule_type == PreUseBashRule.type:
             return self._create_pre_use_bash_rule(rule_id, rule_config)
-        elif rule_type == "path_access":
+        elif rule_type == PathAccessRule.type:
             return self._create_path_access_rule(rule_id, rule_config)
         else:
             raise NotImplementedError(
