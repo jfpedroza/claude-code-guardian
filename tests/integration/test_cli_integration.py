@@ -35,6 +35,7 @@ class TestCLIIntegration:
         assert "Claude Code Guardian" in result.stdout
         assert "hook" in result.stdout
         assert "rules" in result.stdout
+        assert "you forgot the hook argument" in result.stderr
 
 
 class TestHookCommandIntegration:

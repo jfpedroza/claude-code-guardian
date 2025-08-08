@@ -26,6 +26,7 @@ class TestCLI:
         assert "Usage:" in result.output
         assert "Commands:" in result.output
         assert "hook" in result.output
+        assert "you forgot the hook argument" in result.stderr
 
     @pytest.mark.parametrize("help_flag", ["-h", "--help"])
     def test_main_help_flag(self, help_flag):

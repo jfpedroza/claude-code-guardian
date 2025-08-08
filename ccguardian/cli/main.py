@@ -18,6 +18,11 @@ def main(ctx):
 
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
+        click.echo("")
+        click.echo(
+            "If you see this in Claude Code, you forgot the hook argument: claude-code-guardian hook",
+            err=True,
+        )
         sys.exit(1)
 
 
