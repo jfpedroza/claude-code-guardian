@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import yaml
+from platformdirs import user_config_dir
 
 from .exceptions import ConfigValidationError
 from .types import ConfigurationSource, RawConfiguration, SourceType
@@ -34,8 +35,8 @@ class ConfigurationLoader:
             )
             config_path = validated_dir / "config.yml"
         else:
-            home = Path.home()
-            config_path = home / ".config" / "claude-code-guardian" / "config.yml"
+            config_dir = user_config_dir("claude-code-guardian")
+            config_path = Path(config_dir) / "config.yml"
 
         return ConfigurationSource(
             source_type=SourceType.USER, path=config_path, exists=config_path.exists()
