@@ -8,11 +8,13 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from ccguardian.config.exceptions import ConfigValidationError
-from ccguardian.config.loader import ConfigurationLoader
-from ccguardian.config.manager import ConfigurationManager
-from ccguardian.config.merger import ConfigurationMerger
-from ccguardian.config.types import SourceType
+from ccguardian.config import (
+    ConfigurationLoader,
+    ConfigurationManager,
+    ConfigurationMerger,
+    ConfigValidationError,
+    SourceType,
+)
 from ccguardian.rules import Action, PreUseBashRule
 
 
@@ -135,7 +137,7 @@ class TestConfigurationPipeline:
                 env_patch1,
                 env_patch2,
             ):
-                from ccguardian.config.types import (
+                from ccguardian.config import (
                     ConfigurationSource,
                     RawConfiguration,
                     SourceType,

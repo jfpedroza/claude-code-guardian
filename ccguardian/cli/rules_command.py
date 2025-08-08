@@ -4,8 +4,7 @@ import logging
 
 import click
 
-from ..config import ConfigValidationError
-from ..config.manager import ConfigurationManager
+from ..config import ConfigurationManager, ConfigValidationError
 from ..rules import PathAccessRule, PreUseBashRule, Rule
 from ..utils import setup_logging
 

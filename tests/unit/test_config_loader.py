@@ -8,9 +8,12 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 import yaml
 
-from ccguardian.config.exceptions import ConfigValidationError
-from ccguardian.config.loader import ConfigurationLoader
-from ccguardian.config.types import ConfigurationSource, SourceType
+from ccguardian.config import (
+    ConfigurationLoader,
+    ConfigurationSource,
+    ConfigValidationError,
+    SourceType,
+)
 
 
 class TestConfigurationLoader:

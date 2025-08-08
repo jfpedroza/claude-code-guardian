@@ -2,8 +2,7 @@
 
 import pytest
 
-from ccguardian.config.exceptions import ConfigValidationError
-from ccguardian.config.factory import RuleFactory
+from ccguardian.config import ConfigValidationError, RuleFactory
 from ccguardian.rules import (
     DEFAULT_PRIORITY,
     Action,

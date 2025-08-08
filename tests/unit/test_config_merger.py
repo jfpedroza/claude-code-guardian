@@ -4,9 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from ccguardian.config.exceptions import ConfigValidationError
-from ccguardian.config.merger import ConfigurationMerger
-from ccguardian.config.types import ConfigurationSource, RawConfiguration, SourceType
+from ccguardian.config import (
+    ConfigurationMerger,
+    ConfigurationSource,
+    ConfigValidationError,
+    RawConfiguration,
+    SourceType,
+)
 
 
 class TestConfigurationMerger:

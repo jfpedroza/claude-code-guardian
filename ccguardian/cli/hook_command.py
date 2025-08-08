@@ -11,8 +11,7 @@ from cchooks import (
     safe_create_context,
 )
 
-from ..config import ConfigValidationError
-from ..config.manager import ConfigurationManager
+from ..config import ConfigurationManager, ConfigValidationError
 from ..rules import Action, RuleResult
 from ..utils import setup_logging
 
