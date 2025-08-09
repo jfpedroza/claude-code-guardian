@@ -195,7 +195,7 @@ rules:
 #### Action Types
 
 - **`allow`**: Permit operation silently
-- **`warn`**: Show warning but allow operation
+- **`warn`**: Show warning. Let Claude's default permission system run
 - **`ask`**: Require user confirmation
 - **`deny`**: Block operation completely
 - **`halt`**: Stop all processing
