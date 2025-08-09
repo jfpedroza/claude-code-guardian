@@ -199,6 +199,6 @@ class TestRulesCommandIntegration:
         assert "security.git_commands" in result.stdout
 
         assert "Type: pre_use_bash" in result.stdout
-        assert "Priority: 50" in result.stdout
+        assert "Priority: 30" in result.stdout
         assert "Commands:" in result.stdout
         assert "action: deny" in result.stdout

@@ -116,7 +116,7 @@ class TestRulesCommand:
                 assert "performance.grep_suggestion" in result.output
                 assert "performance.find_suggestion" in result.output
                 assert "Type: pre_use_bash" in result.output
-                assert "Priority: 50" in result.output
+                assert "Priority: 30" in result.output
 
                 assert "Commands:" in result.output
                 assert "action: deny" in result.output

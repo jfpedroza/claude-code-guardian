@@ -9,7 +9,7 @@ rules:
     pattern: "^grep\\b(?!.*\\|)"
     action: deny
     message: "Use 'rg' (ripgrep) instead of 'grep' for better performance and features"
-    priority: 50
+    priority: 30
     enabled: true
 
   performance.find_suggestion:
@@ -17,7 +17,7 @@ rules:
     pattern: "^find\\s+\\S+\\s+-name\\b"
     action: deny
     message: "Use 'rg --files | rg pattern' or 'rg --files -g pattern' instead of 'find -name' for better performance"
-    priority: 50
+    priority: 30
     enabled: true
 
   security.git_access:
@@ -25,7 +25,7 @@ rules:
     scope: write
     action: deny
     message: "Direct access to .git directory is restricted for security"
-    priority: 50
+    priority: 30
     paths:
       - pattern: "**/.git"
       - pattern: "**/.git/**"
@@ -33,7 +33,7 @@ rules:
 
   security.git_commands:
     type: pre_use_bash
-    priority: 50
+    priority: 30
     commands:
       - pattern: "^git push --force\\b"
         message: "Use git push --force-with-lease"
