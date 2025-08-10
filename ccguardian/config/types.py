@@ -3,9 +3,9 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 from ..rules import Rule
+from .models import ConfigFile
 
 
 class SourceType(Enum):
@@ -41,7 +41,7 @@ class RawConfiguration:
     """Raw configuration data loaded from YAML before processing."""
 
     source: ConfigurationSource
-    data: dict[str, Any]
+    data: ConfigFile
 
 
 @dataclass
