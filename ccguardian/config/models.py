@@ -9,6 +9,73 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from ..rules import Action, Scope
 
 
+def _validate_regex_pattern(pattern: str) -> None:
+    """
+    Validate a regex pattern string.
+
+    Args:
+        pattern: The regex pattern to validate
+
+    Raises:
+        ValueError: If pattern is invalid
+    """
+    if not pattern or not isinstance(pattern, str):
+        raise ValueError("Pattern must be a non-empty string")
+
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        raise ValueError(f"Invalid regex pattern '{pattern}': {e}") from e
+
+
+def _validate_glob_pattern(pattern: str) -> None:
+    """
+    Validate a glob pattern string.
+
+    Args:
+        pattern: The glob pattern to validate
+
+    Raises:
+        ValueError: If pattern is invalid
+    """
+    if not pattern or not isinstance(pattern, str):
+        raise ValueError("Pattern must be a non-empty string")
+
+    try:
+        # Use Path.match() which provides better validation than fnmatch
+        # Test with a realistic dummy path that should work with valid patterns
+        test_path = Path("test/path/file.txt")
+        test_path.match(pattern)
+
+        # Additional validation for common glob pattern issues
+        # Check for unbalanced brackets which Path.match() might not catch
+        bracket_count = 0
+        in_bracket = False
+        for char in pattern:
+            if char == "[":
+                if in_bracket:
+                    raise ValueError("Nested brackets not allowed in glob patterns")
+                in_bracket = True
+                bracket_count += 1
+            elif char == "]":
+                if not in_bracket:
+                    raise ValueError("Closing bracket without opening bracket in glob pattern")
+                in_bracket = False
+                bracket_count -= 1
+
+        # Check for unmatched opening brackets
+        if in_bracket or bracket_count != 0:
+            raise ValueError("Unmatched brackets in glob pattern")
+
+    except ValueError as e:
+        if "bracket" in str(e) or "glob pattern" in str(e):
+            raise  # Re-raise our custom bracket errors and glob pattern errors
+        raise ValueError(f"Invalid glob pattern '{pattern}': {e}") from e
+    except Exception as e:
+        # Catch OSError from Path.match() and any other unexpected exceptions
+        raise ValueError(f"Invalid glob pattern '{pattern}': {e}") from e
+
+
 class CommandPatternModel(BaseModel):
     """Pattern definition for bash command rules."""
 
@@ -20,14 +87,7 @@ class CommandPatternModel(BaseModel):
     @classmethod
     def validate_regex_pattern(cls, v: str) -> str:
         """Validate regex pattern using re.compile()."""
-        if not v or not isinstance(v, str):
-            raise ValueError("Pattern must be a non-empty string")
-
-        try:
-            re.compile(v)
-        except re.error as e:
-            raise ValueError(f"Invalid regex pattern '{v}': {e}") from e
-
+        _validate_regex_pattern(v)
         return v
 
 
@@ -43,44 +103,7 @@ class PathPatternModel(BaseModel):
     @classmethod
     def validate_glob_pattern(cls, v: str) -> str:
         """Validate glob pattern using pathlib.Path.match()."""
-        if not v or not isinstance(v, str):
-            raise ValueError("Pattern must be a non-empty string")
-
-        try:
-            # Use Path.match() which provides better validation than fnmatch
-            # Test with a realistic dummy path that should work with valid patterns
-            test_path = Path("test/path/file.txt")
-            test_path.match(v)
-
-            # Additional validation for common glob pattern issues
-            # Check for unbalanced brackets which Path.match() might not catch
-            bracket_count = 0
-            in_bracket = False
-            for char in v:
-                if char == "[":
-                    if in_bracket:
-                        raise ValueError("Nested brackets not allowed in glob patterns")
-                    in_bracket = True
-                    bracket_count += 1
-                elif char == "]":
-                    if not in_bracket:
-                        raise ValueError(
-                            "Closing bracket without opening bracket in glob pattern"
-                        )
-                    in_bracket = False
-                    bracket_count -= 1
-
-            # Check for unmatched opening brackets
-            if in_bracket or bracket_count != 0:
-                raise ValueError("Unmatched brackets in glob pattern")
-
-        except (ValueError, OSError) as e:
-            if isinstance(e, ValueError) and ("bracket" in str(e) or "glob pattern" in str(e)):
-                raise  # Re-raise our custom bracket errors and glob pattern errors
-            raise ValueError(f"Invalid glob pattern '{v}': {e}") from e
-        except Exception as e:
-            raise ValueError(f"Invalid glob pattern '{v}': {e}") from e
-
+        _validate_glob_pattern(v)
         return v
 
 
@@ -126,10 +149,7 @@ class PreUseBashRuleConfig(RuleConfigBase):
         # Convert single pattern to commands list for internal consistency
         if has_pattern and self.pattern:
             # Validate the pattern using the same logic as CommandPatternModel
-            try:
-                re.compile(self.pattern)
-            except re.error as e:
-                raise ValueError(f"Invalid regex pattern '{self.pattern}': {e}") from e
+            _validate_regex_pattern(self.pattern)
 
             # Convert to commands list
             self.commands = [CommandPatternModel(pattern=self.pattern, action=None, message=None)]
@@ -167,11 +187,7 @@ class PathAccessRuleConfig(RuleConfigBase):
         # Convert single pattern to paths list for internal consistency
         if has_pattern and self.pattern:
             # Validate the pattern using the same logic as PathPatternModel
-            try:
-                test_path = Path("test/path/file.txt")
-                test_path.match(self.pattern)
-            except (ValueError, OSError) as e:
-                raise ValueError(f"Invalid glob pattern '{self.pattern}': {e}") from e
+            _validate_glob_pattern(self.pattern)
 
             # Convert to paths list
             self.paths = [
@@ -188,6 +204,12 @@ class PathAccessRuleConfig(RuleConfigBase):
 
 # For flexibility in partial configurations, we'll use a custom validator
 RuleConfigUnion = PreUseBashRuleConfig | PathAccessRuleConfig | dict[str, Any]
+
+# Mapping from rule types to their corresponding model classes
+RULE_TYPE_MODELS = {
+    "pre_use_bash": PreUseBashRuleConfig,
+    "path_access": PathAccessRuleConfig,
+}
 
 
 class ConfigFile(BaseModel):
@@ -209,16 +231,14 @@ class ConfigFile(BaseModel):
                     # Complete rule config - validate with appropriate model
                     rule_type = rule_config["type"]
 
-                    if rule_type == "pre_use_bash":
-                        validated_rules[rule_id] = PreUseBashRuleConfig.model_validate(
-                            rule_config
-                        )
-                    elif rule_type == "path_access":
-                        validated_rules[rule_id] = PathAccessRuleConfig.model_validate(
-                            rule_config
-                        )
+                    if rule_type in RULE_TYPE_MODELS:
+                        model_class = RULE_TYPE_MODELS[rule_type]
+                        validated_rules[rule_id] = model_class.model_validate(rule_config)
                     else:
-                        raise ValueError(f"Unknown rule type: {rule_type}")
+                        valid_types = ", ".join(RULE_TYPE_MODELS.keys())
+                        raise ValueError(
+                            f"Unknown rule type: {rule_type}. Valid types: {valid_types}"
+                        )
                 else:
                     # Partial rule config - basic validation only
                     # Validate priority if present
