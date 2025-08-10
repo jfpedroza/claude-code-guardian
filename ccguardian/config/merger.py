@@ -116,8 +116,14 @@ class ConfigurationMerger:
                 if rule_id not in merged_rules:
                     merged_rules[rule_id] = {}
 
-                # Convert Pydantic model to dictionary for the factory
-                rule_dict = rule_config.model_dump(exclude_none=True)
+                # Convert model to dictionary for the factory
+                # Handle both model objects and raw dictionaries
+                if hasattr(rule_config, "model_dump"):
+                    # Model object - serialize with enum string values
+                    rule_dict = rule_config.model_dump(exclude_none=True, mode="json")
+                else:
+                    # Raw dictionary (partial config)
+                    rule_dict = {k: v for k, v in rule_config.items() if v is not None}
                 self._merge_rule_config(
                     merged_rules[rule_id], rule_dict, rule_id, raw_config.source.path
                 )

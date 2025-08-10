@@ -506,7 +506,7 @@ class TestConfigFile:
 
         errors = exc_info.value.errors()
         assert len(errors) == 1
-        assert "discriminator" in str(errors[0])
+        assert "Unknown rule type" in str(errors[0])
 
     def test_from_dict_integration(self):
         """Test creating ConfigFile from dictionary (integration with YAML parsing)."""

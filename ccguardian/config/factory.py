@@ -97,7 +97,6 @@ class RuleFactory:
             scope=Scope(config["scope"]) if config.get("scope") else None,
         )
 
-
     def create_rules_from_merged_data(
         self, merged_rules_data: dict[str, dict[str, Any]]
     ) -> list[Rule]:

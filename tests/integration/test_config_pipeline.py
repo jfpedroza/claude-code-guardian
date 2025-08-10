@@ -142,6 +142,7 @@ class TestConfigurationPipeline:
                     RawConfiguration,
                     SourceType,
                 )
+                from ccguardian.config.models import ConfigFile
 
                 default_source = ConfigurationSource(
                     SourceType.DEFAULT, Path("/mock/default.yml"), True
@@ -151,7 +152,9 @@ class TestConfigurationPipeline:
 
                     def mock_load_side_effect(source):
                         if source.source_type == SourceType.DEFAULT:
-                            return RawConfiguration(source=source, data=default_config)
+                            # Convert default_config to ConfigFile object
+                            config_file = ConfigFile.model_validate(default_config)
+                            return RawConfiguration(source=source, data=config_file)
                         return ConfigurationLoader.load_yaml_file(self.loader, source)
 
                     mock_load.side_effect = mock_load_side_effect

@@ -7,10 +7,10 @@ import pytest
 from ccguardian.config import (
     ConfigurationMerger,
     ConfigurationSource,
-    ConfigValidationError,
     RawConfiguration,
     SourceType,
 )
+from ccguardian.config.models import ConfigFile
 from ccguardian.rules import DEFAULT_PRIORITY, Action, PathAccessRule, PreUseBashRule, Scope
 
 
@@ -22,9 +22,8 @@ class TestConfigFactoryIntegration:
 
     def test_merger_creates_rule_objects(self):
         source = ConfigurationSource(SourceType.USER, Path("/test.yml"), True)
-        raw_config = RawConfiguration(
-            source=source,
-            data={
+        config_data = ConfigFile.model_validate(
+            {
                 "default_rules": True,
                 "rules": {
                     "security.dangerous_commands": {
@@ -63,8 +62,9 @@ class TestConfigFactoryIntegration:
                         "enabled": True,
                     },
                 },
-            },
+            }
         )
+        raw_config = RawConfiguration(source=source, data=config_data)
 
         result = self.merger.merge_configurations([raw_config])
 
@@ -104,46 +104,44 @@ class TestConfigFactoryIntegration:
         assert rule3.commands[1].action == Action.ASK
 
     def test_merger_handles_invalid_rules(self):
-        source = ConfigurationSource(SourceType.USER, Path("/test.yml"), True)
-        raw_config = RawConfiguration(
-            source=source,
-            data={
-                "rules": {
-                    "valid.rule": {
-                        "type": "pre_use_bash",
-                        "pattern": "test",
-                        "action": "allow",
-                    },
-                    "invalid.missing_type": {
-                        "pattern": "test",
-                        "action": "deny",
-                    },
-                    "invalid.unknown_type": {
-                        "type": "unknown_rule_type",
-                        "pattern": "test",
-                    },
-                    "invalid.no_patterns": {
-                        "type": "pre_use_bash",
-                        "action": "deny",
-                    },
-                    "another.valid": {
-                        "type": "path_access",
-                        "pattern": "*.log",
-                        "action": "warn",
-                    },
-                }
-            },
-        )
+        # With Pydantic validation, invalid configurations fail at ConfigFile creation
+        from pydantic import ValidationError
 
-        with pytest.raises(ConfigValidationError, match="Rule is missing required 'type' field"):
-            self.merger.merge_configurations([raw_config])
+        with pytest.raises(ValidationError):
+            ConfigFile.model_validate(
+                {
+                    "rules": {
+                        "valid.rule": {
+                            "type": "pre_use_bash",
+                            "pattern": "test",
+                            "action": "allow",
+                        },
+                        "invalid.missing_type": {
+                            "pattern": "test",
+                            "action": "deny",
+                        },
+                        "invalid.unknown_type": {
+                            "type": "unknown_rule_type",
+                            "pattern": "test",
+                        },
+                        "invalid.no_patterns": {
+                            "type": "pre_use_bash",
+                            "action": "deny",
+                        },
+                        "another.valid": {
+                            "type": "path_access",
+                            "pattern": "*.log",
+                            "action": "warn",
+                        },
+                    }
+                }
+            )
 
     def test_merger_rule_merging_with_factory(self):
         # First config
         source1 = ConfigurationSource(SourceType.USER, Path("/user.yml"), True)
-        config1 = RawConfiguration(
-            source=source1,
-            data={
+        config_data1 = ConfigFile.model_validate(
+            {
                 "rules": {
                     "test.rule": {
                         "type": "pre_use_bash",
@@ -153,22 +151,24 @@ class TestConfigFactoryIntegration:
                         "message": "Original message",
                     }
                 }
-            },
+            }
         )
+        config1 = RawConfiguration(source=source1, data=config_data1)
 
         source2 = ConfigurationSource(SourceType.LOCAL, Path("/local.yml"), True)
-        config2 = RawConfiguration(
-            source=source2,
-            data={
+        config_data2 = ConfigFile.model_validate(
+            {
                 "rules": {
                     "test.rule": {
+                        "type": "pre_use_bash",  # Required for Pydantic validation
                         "pattern": "overridden",
                         "action": "deny",
                         "message": "Overridden message",
                     }
                 }
-            },
+            }
         )
+        config2 = RawConfiguration(source=source2, data=config_data2)
 
         result = self.merger.merge_configurations([config1, config2])
 

@@ -186,11 +186,8 @@ class PathAccessRuleConfig(RuleConfigBase):
         return self
 
 
-# Discriminated union for type-safe rule parsing
-RuleConfigUnion = Annotated[
-    Union[PreUseBashRuleConfig, PathAccessRuleConfig],
-    Field(discriminator="type")
-]
+# For flexibility in partial configurations, we'll use a custom validator
+RuleConfigUnion = PreUseBashRuleConfig | PathAccessRuleConfig | dict[str, Any]
 
 
 class ConfigFile(BaseModel):
@@ -198,6 +195,56 @@ class ConfigFile(BaseModel):
 
     default_rules: bool | list[str] | None = None
     rules: dict[str, RuleConfigUnion] = Field(default_factory=dict)
+
+    @field_validator("rules")
+    @classmethod
+    def validate_rules(cls, v: dict[str, Any]) -> dict[str, Any]:
+        """Validate rule configurations, allowing both complete and partial configs."""
+        validated_rules = {}
+
+        for rule_id, rule_config in v.items():
+            if isinstance(rule_config, dict):
+                # Raw dictionary - attempt validation if type is present
+                if "type" in rule_config:
+                    # Complete rule config - validate with appropriate model
+                    rule_type = rule_config["type"]
+
+                    if rule_type == "pre_use_bash":
+                        validated_rules[rule_id] = PreUseBashRuleConfig.model_validate(
+                            rule_config
+                        )
+                    elif rule_type == "path_access":
+                        validated_rules[rule_id] = PathAccessRuleConfig.model_validate(
+                            rule_config
+                        )
+                    else:
+                        raise ValueError(f"Unknown rule type: {rule_type}")
+                else:
+                    # Partial rule config - basic validation only
+                    # Validate priority if present
+                    if "priority" in rule_config and rule_config["priority"] is not None:
+                        priority = rule_config["priority"]
+                        if not isinstance(priority, int) or priority < 0:
+                            raise ValueError(
+                                f"Priority must be a non-negative integer, got {priority}"
+                            )
+
+                    # Validate action if present
+                    if "action" in rule_config and rule_config["action"] is not None:
+                        action = rule_config["action"]
+                        if isinstance(action, str):
+                            try:
+                                Action(action.lower())  # Action values are lowercase
+                            except ValueError as e:
+                                raise ValueError(f"Invalid action value: {action}") from e
+
+                    # Store as dict for partial configs
+                    validated_rules[rule_id] = rule_config
+            else:
+                # Already validated Pydantic model
+                validated_rules[rule_id] = rule_config
+
+        return validated_rules
 
     @field_validator("default_rules")
     @classmethod
