@@ -5,12 +5,13 @@ from pathlib import Path
 import pytest
 
 from ccguardian.config import (
+    ConfigFile,
     ConfigurationMerger,
     ConfigurationSource,
+    ConfigValidationError,
     RawConfiguration,
     SourceType,
 )
-from ccguardian.config.models import ConfigFile
 
 
 class TestConfigurationMerger:
@@ -21,8 +22,7 @@ class TestConfigurationMerger:
         result = self.merger.merge_configurations([])
 
         assert result.sources == []
-        assert result.default_rules_enabled is True
-        assert result.default_rules_patterns is None
+        assert result.default_rules is True
         assert result.rules == []
 
     def test_merge_single_configuration(self):
@@ -46,8 +46,7 @@ class TestConfigurationMerger:
 
         assert len(result.sources) == 1
         assert result.sources[0] == source
-        assert result.default_rules_enabled is False
-        assert result.default_rules_patterns is None
+        assert result.default_rules is False
 
     def test_merge_multiple_configurations_hierarchy(self):
         # Default config
@@ -82,53 +81,25 @@ class TestConfigurationMerger:
         result = self.merger.merge_configurations([default_config, user_config])
 
         assert len(result.sources) == 2
-        assert result.default_rules_enabled is False  # User config overrides
-        assert result.default_rules_patterns is None
-
-    def test_process_default_rules_true(self):
-        enabled, patterns = self.merger._process_default_rules(True)
-        assert enabled is True
-        assert patterns is None
-
-    def test_process_default_rules_false(self):
-        enabled, patterns = self.merger._process_default_rules(False)
-        assert enabled is False
-        assert patterns is None
-
-    def test_process_default_rules_patterns(self):
-        enabled, patterns = self.merger._process_default_rules(["security.*", "performance.*"])
-        assert enabled is True
-        assert patterns == ["security.*", "performance.*"]
-
-    def test_process_default_rules_invalid(self):
-        # With Pydantic validation, the method handles invalid input gracefully
-        # by falling back to default behavior
-        enabled, patterns = self.merger._process_default_rules("invalid")
-        assert enabled is True  # Falls back to default
-        assert patterns is None
+        assert result.default_rules is False  # User config overrides
 
     def test_should_include_default_rule_disabled(self):
-        assert not self.merger._should_include_default_rule("security.test", False, None)
-        assert not self.merger._should_include_default_rule(
-            "security.test", False, ["security.*"]
-        )
+        assert not self.merger._should_include_default_rule("security.test", False)
 
     def test_should_include_default_rule_all_enabled(self):
-        assert self.merger._should_include_default_rule("security.test", True, None)
-        assert self.merger._should_include_default_rule("performance.test", True, None)
+        assert self.merger._should_include_default_rule("security.test", True)
+        assert self.merger._should_include_default_rule("performance.test", True)
 
     def test_should_include_default_rule_pattern_matching(self):
         patterns = ["security.*", "performance.grep*"]
 
         # Should match
-        assert self.merger._should_include_default_rule("security.dangerous", True, patterns)
-        assert self.merger._should_include_default_rule(
-            "performance.grep_suggestion", True, patterns
-        )
+        assert self.merger._should_include_default_rule("security.dangerous", patterns)
+        assert self.merger._should_include_default_rule("performance.grep_suggestion", patterns)
 
         # Should not match
-        assert not self.merger._should_include_default_rule("debug.logging", True, patterns)
-        assert not self.merger._should_include_default_rule("performance.find", True, patterns)
+        assert not self.merger._should_include_default_rule("debug.logging", patterns)
+        assert not self.merger._should_include_default_rule("performance.find", patterns)
 
     def test_merge_rules_by_id_simple(self):
         source = ConfigurationSource(SourceType.USER, Path("/user.yml"), True)
@@ -142,7 +113,7 @@ class TestConfigurationMerger:
         )
         raw_config = RawConfiguration(source=source, data=config_data)
 
-        result = self.merger._merge_rules_by_id([raw_config], True, None)
+        result = self.merger._merge_rules_by_id([raw_config], True)
 
         assert len(result) == 2
         assert "test.rule1" in result
@@ -188,7 +159,7 @@ class TestConfigurationMerger:
         )
         config2 = RawConfiguration(source=source2, data=config_data2)
 
-        result = self.merger._merge_rules_by_id([config1, config2], True, None)
+        result = self.merger._merge_rules_by_id([config1, config2], True)
 
         assert len(result) == 1
         assert "test.rule" in result
@@ -215,8 +186,8 @@ class TestConfigurationMerger:
             {
                 "rules": {
                     "test.rule": {
-                        "type": "path_access",  # Different type for same rule ID
-                        "pattern": "*.env",
+                        "type": "path_access",  # Attempt to change type
+                        "pattern": ".env*",
                         "action": "deny",
                     }
                 }
@@ -224,11 +195,13 @@ class TestConfigurationMerger:
         )
         config2 = RawConfiguration(source=source2, data=config_data2)
 
-        # With Pydantic validation, type consistency is handled differently
-        # The merger now accepts valid rule configs and merges them
-        result = self.merger._merge_rules_by_id([config1, config2], True, None)
-        # The later config (config2) should override the earlier one
-        assert result["test.rule"]["type"] == "path_access"
+        with pytest.raises(ConfigValidationError) as exc_info:
+            self.merger._merge_rules_by_id([config1, config2], True)
+
+        assert "Cannot change rule type from 'pre_use_bash' to 'path_access'" in str(
+            exc_info.value
+        )
+        assert "test.rule" in str(exc_info.value)
 
     def test_merge_rules_default_filtering(self):
         # Default config with multiple rules
@@ -245,9 +218,7 @@ class TestConfigurationMerger:
         default_config = RawConfiguration(source=default_source, data=config_data)
 
         # Test with patterns filtering
-        result = self.merger._merge_rules_by_id(
-            [default_config], True, ["security.*", "performance.*"]
-        )
+        result = self.merger._merge_rules_by_id([default_config], ["security.*", "performance.*"])
 
         assert len(result) == 2
         assert "security.dangerous" in result

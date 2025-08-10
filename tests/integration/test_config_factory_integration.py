@@ -187,5 +187,4 @@ class TestConfigFactoryIntegration:
         result = self.merger.merge_configurations([])
 
         assert result.rules == []
-        assert result.default_rules_enabled is True
-        assert result.default_rules_patterns is None
+        assert result.default_rules is True

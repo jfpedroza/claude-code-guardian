@@ -165,8 +165,7 @@ class TestConfigurationPipeline:
                     assert raw_configs[2].source.source_type == SourceType.SHARED
                     assert raw_configs[3].source.source_type == SourceType.LOCAL
                     merged_config = self.merger.merge_configurations(raw_configs)
-                    assert merged_config.default_rules_enabled is True
-                    assert merged_config.default_rules_patterns == ["performance.*"]
+                    assert merged_config.default_rules == ["performance.*"]
                     assert len(merged_config.sources) == 4
 
     def test_pipeline_with_no_project_configs(self):
@@ -249,7 +248,7 @@ class TestConfigurationManagerIntegration:
                 config = manager.load_configuration()
                 assert config.total_rules > 0
                 assert len(config.active_rules) > 0
-                assert config.default_rules_enabled is True
+                assert config.default_rules == ["security.*"]
                 source_types = [source.source_type for source in config.sources]
                 assert SourceType.DEFAULT in source_types
 

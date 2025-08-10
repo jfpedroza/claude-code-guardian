@@ -5,9 +5,11 @@ from .factory import RuleFactory
 from .loader import ConfigurationLoader
 from .manager import ConfigurationManager
 from .merger import ConfigurationMerger
+from .models import ConfigFile
 from .types import Configuration, ConfigurationSource, RawConfiguration, SourceType
 
 __all__ = [
+    "ConfigFile",
     "Configuration",
     "ConfigurationLoader",
     "ConfigurationManager",

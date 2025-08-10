@@ -49,8 +49,7 @@ class Configuration:
     """Final processed configuration with merged rules."""
 
     sources: list[ConfigurationSource] = field(default_factory=list)
-    default_rules_enabled: bool = True
-    default_rules_patterns: list[str] | None = None
+    default_rules: bool | list[str] = True
     rules: list[Rule] = field(default_factory=list)
 
     @property

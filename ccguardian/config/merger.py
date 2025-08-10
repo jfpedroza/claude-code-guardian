@@ -4,6 +4,7 @@ import fnmatch
 import logging
 from typing import Any
 
+from .exceptions import ConfigValidationError
 from .factory import RuleFactory
 from .types import Configuration, RawConfiguration
 
@@ -35,7 +36,7 @@ class ConfigurationMerger:
 
         # Collect sources and the final default_rules setting
         sources = []
-        final_default_rules = True  # Default value
+        final_default_rules: bool | list[str] = True  # Default value
 
         for raw_config in raw_configs:
             sources.append(raw_config.source)
@@ -43,60 +44,26 @@ class ConfigurationMerger:
             if raw_config.data.default_rules is not None:
                 final_default_rules = raw_config.data.default_rules
 
-        default_rules_enabled, default_rules_patterns = self._process_default_rules(
-            final_default_rules
-        )
-
-        merged_rules_data = self._merge_rules_by_id(
-            raw_configs, default_rules_enabled, default_rules_patterns
-        )
+        merged_rules_data = self._merge_rules_by_id(raw_configs, final_default_rules)
         rules = self.rule_factory.create_rules_from_merged_data(merged_rules_data)
 
         return Configuration(
             sources=sources,
-            default_rules_enabled=default_rules_enabled,
-            default_rules_patterns=default_rules_patterns,
+            default_rules=final_default_rules,
             rules=rules,
         )
-
-    def _process_default_rules(
-        self, default_rules_setting: bool | list[str] | None
-    ) -> tuple[bool, list[str] | None]:
-        """
-        Process default_rules configuration setting.
-
-        Args:
-            default_rules_setting: Value of default_rules from config (pre-validated)
-
-        Returns:
-            Tuple of (enabled, patterns) where:
-            - enabled: True if any default rules should be included
-            - patterns: None for all, or list of glob patterns to match
-        """
-        if default_rules_setting is None or default_rules_setting is True:
-            return True, None
-        elif default_rules_setting is False:
-            return False, None
-        elif isinstance(default_rules_setting, list):
-            # Already validated by Pydantic to be list[str]
-            return True, default_rules_setting
-        else:
-            # This shouldn't happen due to Pydantic validation, but handle gracefully
-            return True, None
 
     def _merge_rules_by_id(
         self,
         raw_configs: list[RawConfiguration],
-        default_rules_enabled: bool,
-        default_rules_patterns: list[str] | None,
+        default_rules_setting: bool | list[str],
     ) -> dict[str, dict[str, Any]]:
         """
         Merge rules by ID across all configurations.
 
         Args:
             raw_configs: List of raw configurations
-            default_rules_enabled: Whether default rules should be included
-            default_rules_patterns: Patterns to match default rules (None = all)
+            default_rules_setting: Default rules setting (True=all, False=none, list=patterns)
 
         Returns:
             Dictionary mapping rule ID to merged rule data
@@ -107,9 +74,7 @@ class ConfigurationMerger:
             for rule_id, rule_config in raw_config.data.rules.items():
                 if (
                     raw_config.source.source_type.value == "default"
-                    and not self._should_include_default_rule(
-                        rule_id, default_rules_enabled, default_rules_patterns
-                    )
+                    and not self._should_include_default_rule(rule_id, default_rules_setting)
                 ):
                     continue
 
@@ -131,26 +96,26 @@ class ConfigurationMerger:
         return merged_rules
 
     def _should_include_default_rule(
-        self, rule_id: str, enabled: bool, patterns: list[str] | None
+        self, rule_id: str, default_rules_setting: bool | list[str]
     ) -> bool:
         """
         Check if a default rule should be included based on filtering settings.
 
         Args:
             rule_id: Rule identifier to check
-            enabled: Whether default rules are enabled at all
-            patterns: Glob patterns to match (None = include all)
+            default_rules_setting: Default rules setting (True=all, False=none, list=patterns)
 
         Returns:
             True if rule should be included
         """
-        if not enabled:
+        if default_rules_setting is False:
             return False
 
-        if patterns is None:
+        if default_rules_setting is True:
             return True
 
-        for pattern in patterns:
+        # default_rules_setting is a list of patterns
+        for pattern in default_rules_setting:
             if fnmatch.fnmatch(rule_id, pattern):
                 return True
 
@@ -163,16 +128,25 @@ class ConfigurationMerger:
         Merge source rule configuration into target rule.
 
         Simple merge strategy: later configurations override earlier ones.
-        Type consistency is already enforced by validation.
+        The rule type field cannot be changed once set.
 
         Args:
             target: Target rule configuration to merge into
             source: Source rule configuration to merge from
             rule_id: Rule ID for logging
             source_path: Source file path for logging
+
+        Raises:
+            ConfigValidationError: If attempting to override rule type
         """
         for key, value in source.items():
             # Only replace previous values if the new value is not None
             # This preserves hierarchical merging behavior
             if value is not None:
+                if key == "type" and key in target and target[key] != value:
+                    raise ConfigValidationError(
+                        f"Cannot change rule type from '{target[key]}' to '{value}'",
+                        rule_id=rule_id,
+                        source_path=str(source_path),
+                    )
                 target[key] = value
