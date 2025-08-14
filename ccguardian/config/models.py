@@ -290,3 +290,34 @@ class ConfigFile(BaseModel):
             if not isinstance(key, str) or not key.strip():
                 raise ValueError(f"Rule ID '{key}' must be a non-empty string")
         return v
+
+
+def validate_rule_config(rule_data: dict[str, Any], rule_id: str) -> RuleConfigBase:
+    """
+    Validate and convert a rule configuration dictionary to a RuleConfigBase instance.
+
+    Args:
+        rule_data: Dictionary containing rule configuration
+        rule_id: Rule identifier for error reporting
+
+    Returns:
+        Validated RuleConfigBase instance
+
+    Raises:
+        ValueError: If rule validation fails
+    """
+    rule_type = rule_data.get("type")
+    if not rule_type:
+        raise ValueError(f"Rule '{rule_id}' is missing required 'type' field")
+
+    if rule_type not in RULE_TYPE_MODELS:
+        valid_types = ", ".join(RULE_TYPE_MODELS.keys())
+        raise ValueError(
+            f"Rule '{rule_id}' has unknown type '{rule_type}'. Valid types: {valid_types}"
+        )
+
+    model_class = RULE_TYPE_MODELS[rule_type]
+    try:
+        return model_class.model_validate(rule_data)
+    except Exception as e:
+        raise ValueError(f"Rule '{rule_id}' validation failed: {e}") from e

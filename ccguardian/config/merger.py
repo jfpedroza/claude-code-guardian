@@ -4,8 +4,11 @@ import fnmatch
 import logging
 from typing import Any
 
+from pydantic import ValidationError
+
 from .exceptions import ConfigValidationError
 from .factory import RuleFactory
+from .models import RuleConfigBase, validate_rule_config
 from .types import Configuration, RawConfiguration
 
 logger = logging.getLogger(__name__)
@@ -57,16 +60,19 @@ class ConfigurationMerger:
         self,
         raw_configs: list[RawConfiguration],
         default_rules_setting: bool | list[str],
-    ) -> dict[str, dict[str, Any]]:
+    ) -> dict[str, RuleConfigBase]:
         """
-        Merge rules by ID across all configurations.
+        Merge rules by ID across all configurations and validate final results.
 
         Args:
             raw_configs: List of raw configurations
             default_rules_setting: Default rules setting (True=all, False=none, list=patterns)
 
         Returns:
-            Dictionary mapping rule ID to merged rule data
+            Dictionary mapping rule ID to validated rule configuration instances
+
+        Raises:
+            ConfigValidationError: If merged rule configurations are invalid
         """
         merged_rules: dict[str, dict[str, Any]] = {}
 
@@ -81,7 +87,7 @@ class ConfigurationMerger:
                 if rule_id not in merged_rules:
                     merged_rules[rule_id] = {}
 
-                # Convert model to dictionary for the factory
+                # Convert model to dictionary for merging
                 # Handle both model objects and raw dictionaries
                 if hasattr(rule_config, "model_dump"):
                     # Model object - serialize with enum string values
@@ -93,7 +99,8 @@ class ConfigurationMerger:
                     merged_rules[rule_id], rule_dict, rule_id, raw_config.source.path
                 )
 
-        return merged_rules
+        # Validate and convert merged configurations to typed instances
+        return self._validate_merged_rules(merged_rules)
 
     def _should_include_default_rule(
         self, rule_id: str, default_rules_setting: bool | list[str]
@@ -150,3 +157,43 @@ class ConfigurationMerger:
                         source_path=str(source_path),
                     )
                 target[key] = value
+
+    def _validate_merged_rules(
+        self, merged_rules: dict[str, dict[str, Any]]
+    ) -> dict[str, RuleConfigBase]:
+        """
+        Validate merged rule configurations and convert to typed instances.
+
+        Args:
+            merged_rules: Dictionary of merged rule configurations
+
+        Returns:
+            Dictionary mapping rule ID to validated rule configuration instances
+
+        Raises:
+            ConfigValidationError: If any merged rule configuration is invalid
+        """
+        validated_rules: dict[str, RuleConfigBase] = {}
+
+        for rule_id, rule_data in merged_rules.items():
+            try:
+                validated_rules[rule_id] = validate_rule_config(rule_data, rule_id)
+            except ValidationError as e:
+                # Convert Pydantic validation errors to ConfigValidationError
+                error_details = []
+                for error in e.errors():
+                    location = (
+                        " -> ".join(str(x) for x in error["loc"]) if error["loc"] else "root"
+                    )
+                    error_details.append(f"{location}: {error['msg']}")
+
+                error_message = (
+                    f"Merged rule configuration validation failed for rule '{rule_id}':\n"
+                    + "\n".join(error_details)
+                )
+                raise ConfigValidationError(error_message, rule_id=rule_id) from e
+            except ValueError as e:
+                # Convert ValueError from validate_rule_config to ConfigValidationError
+                raise ConfigValidationError(str(e), rule_id=rule_id) from e
+
+        return validated_rules
