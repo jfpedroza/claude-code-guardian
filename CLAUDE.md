@@ -148,3 +148,4 @@ Configuration sources are merged with local taking highest priority. Each source
 - Don't add any comments unless the next line is really complicated and hard to understand
 - Don't create new abstractions unless absolutely required for fulfilling what's outlined above
 - Most important, try to write simple and easily understood code
+- Prefer importing modules at the top of the file instead of inside functions
