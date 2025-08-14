@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from ccguardian.config import validate_rule_config
 from ccguardian.config.models import (
     CommandPatternModel,
     ConfigFile,
@@ -549,3 +550,79 @@ class TestConfigFile:
         assert grep_rule.action == Action.WARN
         assert len(grep_rule.commands) == 1  # Converted from pattern
         assert grep_rule.commands[0].pattern == "^grep\\b(?!.*\\|)"
+
+    def test_invalid_rules_data(self):
+        """Test validation of invalid rule data in ConfigFile."""
+        with pytest.raises(ValidationError):
+            ConfigFile.model_validate(
+                {
+                    "rules": {
+                        "valid.rule": {"type": "pre_use_bash", "pattern": "test"},
+                        "invalid.rule": "not a dictionary",  # Invalid
+                        "another.valid": {"type": "path_access", "pattern": "*.env"},
+                    }
+                }
+            )
+
+    def test_invalid_rules_section(self):
+        """Test validation of invalid rules section in ConfigFile."""
+        with pytest.raises(ValidationError):
+            ConfigFile.model_validate(
+                {
+                    "rules": "not a dictionary"  # Invalid rules section
+                }
+            )
+
+
+class TestValidateRuleConfig:
+    def test_validate_pre_use_bash_rule(self):
+        rule_data = {
+            "type": "pre_use_bash",
+            "commands": [{"pattern": "git push"}],
+            "action": "deny",
+            "enabled": True,
+            "priority": 100,
+        }
+
+        result = validate_rule_config(rule_data, "test.rule")
+
+        assert isinstance(result, PreUseBashRuleConfig)
+        assert result.type == "pre_use_bash"
+        assert result.action == Action.DENY
+        assert result.enabled is True
+        assert result.priority == 100
+        assert len(result.commands) == 1
+
+    def test_validate_path_access_rule(self):
+        rule_data = {
+            "type": "path_access",
+            "paths": [{"pattern": "*.env", "scope": "read"}],
+            "action": "deny",
+            "scope": "write",
+        }
+
+        result = validate_rule_config(rule_data, "test.rule")
+
+        assert isinstance(result, PathAccessRuleConfig)
+        assert result.type == "path_access"
+        assert result.action == Action.DENY
+        assert result.scope == Scope.WRITE
+        assert len(result.paths) == 1
+
+    def test_validate_rule_config_missing_type(self):
+        rule_data = {"commands": [{"pattern": "test"}]}
+
+        with pytest.raises(ValueError, match="missing required 'type' field"):
+            validate_rule_config(rule_data, "test.rule")
+
+    def test_validate_rule_config_unknown_type(self):
+        rule_data = {"type": "unknown_type", "commands": [{"pattern": "test"}]}
+
+        with pytest.raises(ValueError, match="unknown type 'unknown_type'"):
+            validate_rule_config(rule_data, "test.rule")
+
+    def test_validate_rule_config_invalid_data(self):
+        rule_data = {"type": "pre_use_bash", "commands": "invalid"}  # Should be list
+
+        with pytest.raises(ValueError, match="validation failed"):
+            validate_rule_config(rule_data, "test.rule")

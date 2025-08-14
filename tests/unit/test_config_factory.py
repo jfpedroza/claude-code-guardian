@@ -1,8 +1,6 @@
 """Tests for rule factory functionality."""
 
-import pytest
-
-from ccguardian.config import ConfigValidationError, RuleFactory
+from ccguardian.config import PathAccessRuleConfig, PreUseBashRuleConfig, RuleFactory
 from ccguardian.rules import (
     DEFAULT_PRIORITY,
     Action,
@@ -17,26 +15,28 @@ class TestRuleFactory:
         self.factory = RuleFactory()
 
     def test_create_pre_use_bash_rule(self):
-        config = {
-            "type": "pre_use_bash",
-            "commands": [
-                {
-                    "pattern": "git push$",
-                    "action": "allow",
-                    "message": "Standard git push allowed",
-                },
-                {
-                    "pattern": "git push.*--force",
-                    "action": "ask",
-                    "message": "Force push requires confirmation",
-                },
-                {"pattern": "git push origin"},  # No action/message overrides
-            ],
-            "action": "deny",
-            "message": "Git operation blocked",
-            "priority": 100,
-            "enabled": True,
-        }
+        config = PreUseBashRuleConfig.model_validate(
+            {
+                "type": "pre_use_bash",
+                "commands": [
+                    {
+                        "pattern": "git push$",
+                        "action": "allow",
+                        "message": "Standard git push allowed",
+                    },
+                    {
+                        "pattern": "git push.*--force",
+                        "action": "ask",
+                        "message": "Force push requires confirmation",
+                    },
+                    {"pattern": "git push origin"},  # No action/message overrides
+                ],
+                "action": "deny",
+                "message": "Git operation blocked",
+                "priority": 100,
+                "enabled": True,
+            }
+        )
 
         rule = self.factory.create_rule("git.operations", config)
 
@@ -60,28 +60,30 @@ class TestRuleFactory:
         assert rule.commands[2].message is None  # Will use rule-level message
 
     def test_create_path_access_rule(self):
-        config = {
-            "type": "path_access",
-            "paths": [
-                {
-                    "pattern": "**/.git/**",
-                    "scope": "write",
-                    "action": "warn",
-                    "message": "Direct .git manipulation detected",
-                },
-                {
-                    "pattern": "**/config/secrets/**",
-                    "scope": "read",
-                    "action": "deny",
-                    "message": "Access to secrets directory blocked",
-                },
-                {"pattern": "**/*.log"},  # No overrides
-            ],
-            "action": "allow",
-            "scope": "read_write",
-            "priority": 70,
-            "enabled": True,
-        }
+        config = PathAccessRuleConfig.model_validate(
+            {
+                "type": "path_access",
+                "paths": [
+                    {
+                        "pattern": "**/.git/**",
+                        "scope": "write",
+                        "action": "warn",
+                        "message": "Direct .git manipulation detected",
+                    },
+                    {
+                        "pattern": "**/config/secrets/**",
+                        "scope": "read",
+                        "action": "deny",
+                        "message": "Access to secrets directory blocked",
+                    },
+                    {"pattern": "**/*.log"},  # No overrides
+                ],
+                "action": "allow",
+                "scope": "read_write",
+                "priority": 70,
+                "enabled": True,
+            }
+        )
 
         rule = self.factory.create_rule("security.sensitive_files", config)
 
@@ -108,7 +110,9 @@ class TestRuleFactory:
         assert rule.paths[2].message is None  # Will use rule-level message
 
     def test_create_rule_with_defaults(self):
-        config = {"type": "pre_use_bash", "commands": [{"pattern": "test"}]}
+        config = PreUseBashRuleConfig.model_validate(
+            {"type": "pre_use_bash", "commands": [{"pattern": "test"}]}
+        )
 
         rule = self.factory.create_rule("minimal.rule", config)
 
@@ -116,50 +120,36 @@ class TestRuleFactory:
         assert rule.id == "minimal.rule"
         assert rule.enabled is True  # Default
         assert rule.priority == DEFAULT_PRIORITY  # Default
-        assert (
-            rule.action == Action.CONTINUE
-        )  # Default for PreUseBashRule when no action specified
+        assert rule.action == Action.CONTINUE  # Default for PreUseBashRule
         assert rule.message is None  # Default
         assert len(rule.commands) == 1
 
-    def test_create_rule_missing_type(self):
-        config = {"commands": [{"pattern": "test"}]}
-
-        with pytest.raises(KeyError):
-            self.factory.create_rule("invalid.rule", config)
-
-    def test_create_rule_unknown_type(self):
-        config = {"type": "unknown_type", "commands": [{"pattern": "test"}]}
-
-        with pytest.raises(ConfigValidationError, match="Unsupported rule type 'unknown_type'"):
-            self.factory.create_rule("invalid.rule", config)
-
-    def test_create_rule_no_patterns(self):
-        config = {"type": "pre_use_bash", "action": "deny"}
-
-        with pytest.raises(KeyError):
-            self.factory.create_rule("invalid.rule", config)
-
     def test_create_rules_from_merged_data(self):
         merged_data = {
-            "security.dangerous": {
-                "type": "pre_use_bash",
-                "commands": [{"pattern": "rm -rf"}],
-                "action": "deny",
-                "priority": 100,
-            },
-            "performance.grep": {
-                "type": "pre_use_bash",
-                "commands": [{"pattern": "grep"}],
-                "action": "deny",
-                "priority": DEFAULT_PRIORITY,
-            },
-            "security.env_files": {
-                "type": "path_access",
-                "paths": [{"pattern": "**/.env*"}],
-                "action": "deny",
-                "priority": 80,
-            },
+            "security.dangerous": PreUseBashRuleConfig.model_validate(
+                {
+                    "type": "pre_use_bash",
+                    "commands": [{"pattern": "rm -rf"}],
+                    "action": "deny",
+                    "priority": 100,
+                }
+            ),
+            "performance.grep": PreUseBashRuleConfig.model_validate(
+                {
+                    "type": "pre_use_bash",
+                    "commands": [{"pattern": "grep"}],
+                    "action": "deny",
+                    "priority": DEFAULT_PRIORITY,
+                }
+            ),
+            "security.env_files": PathAccessRuleConfig.model_validate(
+                {
+                    "type": "path_access",
+                    "paths": [{"pattern": "**/.env*"}],
+                    "action": "deny",
+                    "priority": 80,
+                }
+            ),
         }
 
         rules = self.factory.create_rules_from_merged_data(merged_data)
@@ -177,40 +167,28 @@ class TestRuleFactory:
         assert isinstance(rules[1], PathAccessRule)
         assert isinstance(rules[2], PreUseBashRule)
 
-    def test_create_rules_from_merged_data_with_invalid_rule(self):
-        merged_data = {
-            "valid.rule": {
-                "type": "pre_use_bash",
-                "commands": [{"pattern": "test"}],
-                "action": "deny",
-            },
-            "invalid.rule": {
-                "type": "unknown_type",  # This will cause an error
-                "commands": [{"pattern": "test"}],
-            },
-        }
-
-        with pytest.raises(ConfigValidationError, match="Unsupported rule type 'unknown_type'"):
-            self.factory.create_rules_from_merged_data(merged_data)
-
-    def test_create_rules_from_empty_data(self):
-        rules = self.factory.create_rules_from_merged_data({})
-        assert rules == []
-
     def test_rule_priority_sorting(self):
         merged_data = {
-            "rule.c": {
-                "type": "pre_use_bash",
-                "commands": [{"pattern": "c"}],
-                "priority": DEFAULT_PRIORITY,
-            },
-            "rule.a": {"type": "pre_use_bash", "commands": [{"pattern": "a"}], "priority": 100},
-            "rule.b": {
-                "type": "pre_use_bash",
-                "commands": [{"pattern": "b"}],
-                "priority": DEFAULT_PRIORITY,
-            },
-            "rule.d": {"type": "pre_use_bash", "commands": [{"pattern": "d"}], "priority": 100},
+            "rule.c": PreUseBashRuleConfig.model_validate(
+                {
+                    "type": "pre_use_bash",
+                    "commands": [{"pattern": "c"}],
+                    "priority": DEFAULT_PRIORITY,
+                }
+            ),
+            "rule.a": PathAccessRuleConfig.model_validate(
+                {"type": "path_access", "pattern": "a", "priority": 100}
+            ),
+            "rule.b": PreUseBashRuleConfig.model_validate(
+                {
+                    "type": "pre_use_bash",
+                    "commands": [{"pattern": "b"}],
+                    "priority": DEFAULT_PRIORITY,
+                }
+            ),
+            "rule.d": PathAccessRuleConfig.model_validate(
+                {"type": "path_access", "pattern": "d", "priority": 100}
+            ),
         }
 
         rules = self.factory.create_rules_from_merged_data(merged_data)

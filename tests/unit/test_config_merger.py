@@ -118,13 +118,18 @@ class TestConfigurationMerger:
         assert len(result) == 2
         assert "test.rule1" in result
         assert "test.rule2" in result
-        assert result["test.rule1"]["type"] == "pre_use_bash"
+
+        rule1 = result["test.rule1"]
+        assert rule1.type == "pre_use_bash"
         # Pattern has been converted to commands list by Pydantic
-        assert "commands" in result["test.rule1"]
-        assert result["test.rule1"]["commands"][0]["pattern"] == "test1"
+        assert len(rule1.commands) == 1
+        assert rule1.commands[0].pattern == "test1"
+
+        rule2 = result["test.rule2"]
+        assert rule2.type == "path_access"
         # Pattern has been converted to paths list by Pydantic
-        assert "paths" in result["test.rule2"]
-        assert result["test.rule2"]["paths"][0]["pattern"] == "*.env"
+        assert len(rule2.paths) == 1
+        assert rule2.paths[0].pattern == "*.env"
 
     def test_merge_rules_by_id_override(self):
         # First config
@@ -164,13 +169,12 @@ class TestConfigurationMerger:
         assert len(result) == 1
         assert "test.rule" in result
         rule = result["test.rule"]
-        assert rule["type"] == "pre_use_bash"  # From first config
-        assert (
-            rule["commands"][0]["pattern"] == "overridden"
-        )  # Overridden (converted to commands)
-        assert rule["action"] == "deny"  # Overridden (string value)
-        assert rule["priority"] == 10  # From first config
-        assert rule["message"] == "Blocked by local config"  # Added
+
+        assert rule.type == "pre_use_bash"  # From first config
+        assert rule.commands[0].pattern == "overridden"  # Overridden (converted to commands)
+        assert rule.action.value == "deny"  # Overridden (enum value)
+        assert rule.priority == 10  # From first config
+        assert rule.message == "Blocked by local config"  # Added
 
     def test_merge_rules_type_protection(self):
         # First config sets type
@@ -224,29 +228,3 @@ class TestConfigurationMerger:
         assert "security.dangerous" in result
         assert "performance.grep" in result
         assert "debug.logging" not in result
-
-    def test_merge_rules_invalid_data(self):
-        # With Pydantic validation, invalid data fails at ConfigFile creation
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            ConfigFile.model_validate(
-                {
-                    "rules": {
-                        "valid.rule": {"type": "pre_use_bash", "pattern": "test"},
-                        "invalid.rule": "not a dictionary",  # Invalid
-                        "another.valid": {"type": "path_access", "pattern": "*.env"},
-                    }
-                }
-            )
-
-    def test_merge_rules_invalid_rules_section(self):
-        # With Pydantic validation, invalid rules section fails at ConfigFile creation
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            ConfigFile.model_validate(
-                {
-                    "rules": "not a dictionary"  # Invalid rules section
-                }
-            )
