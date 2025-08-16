@@ -1,25 +1,9 @@
 # Default configuration for Claude Code Guardian
 # This file contains built-in rules that ship with the package
 
-default_rules: true
+default_rules: ["security.*"]
 
 rules:
-  performance.grep_suggestion:
-    type: pre_use_bash
-    pattern: "^grep\\b(?!.*\\|)"
-    action: deny
-    message: "Use 'rg' (ripgrep) instead of 'grep' for better performance and features"
-    priority: 30
-    enabled: true
-
-  performance.find_suggestion:
-    type: pre_use_bash
-    pattern: "^find\\s+\\S+\\s+-name\\b"
-    action: deny
-    message: "Use 'rg --files | rg pattern' or 'rg --files -g pattern' instead of 'find -name' for better performance"
-    priority: 30
-    enabled: true
-
   security.git_access:
     type: path_access
     scope: write
@@ -29,7 +13,6 @@ rules:
     paths:
       - pattern: "**/.git"
       - pattern: "**/.git/**"
-    enabled: true
 
   security.git_commands:
     type: pre_use_bash
@@ -38,4 +21,18 @@ rules:
       - pattern: "^git push --force\\b"
         message: "Use git push --force-with-lease"
         action: deny
-    enabled: true
+
+  performance.grep_suggestion:
+    type: pre_use_bash
+    pattern: "^grep\\b(?!.*\\|)"
+    action: deny
+    message: "Use 'rg' (ripgrep) instead of 'grep' for better performance and features"
+    priority: 30
+
+  performance.find_suggestion:
+    type: pre_use_bash
+    pattern: "^find\\s+\\S+\\s+-name\\b"
+    action: deny
+    message: "Use 'rg --files | rg pattern' or 'rg --files -g pattern' instead of 'find -name' for better performance"
+    priority: 30
+

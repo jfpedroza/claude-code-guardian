@@ -164,22 +164,20 @@ but any name works
 
 ## Default Rules
 
-Claude Code Guardian comes with built-in default rules that provide basic security
-and performance optimizations. All default rules have a priority of 30 and are
-enabled by default.
+Claude Code Guardian comes with built-in default rules that provide basic security and performance optimizations.
+All default rules have a priority of 30. Only security rules are enabled by default.
+
+You can enable all default rules by setting `default_rules: true` in your configuration,
+disable them with `default_rules: false` or enable specific categories using patterns like `default_rules: ["performance.*"]`.
 
 | Rule ID | Type | Description |
 |---------|------|-------------|
+| `security.git_access` | `path_access` | Blocks direct write access to `.git` directories |
+| `security.git_commands` | `pre_use_bash` | Prevents `git push --force`, suggests `--force-with-lease` instead |
 | `performance.grep_suggestion` | `pre_use_bash` | Suggests using `rg` (ripgrep) instead of `grep` |
 | `performance.find_suggestion` | `pre_use_bash` | Suggests using ripgrep file search instead of `find -name` commands |
-| `security.git_access` | `path_access` | Blocks direct write access to `.git` directories for security |
-| `security.git_commands` | `pre_use_bash` | Prevents `git push --force`, suggests `--force-with-lease` instead |
 
 **View Complete Default Rules:** [ccguardian/config/default.yml](https://github.com/jfpedroza/claude-code-guardian/blob/main/ccguardian/config/default.yml)
-
-You can disable default rules entirely by setting `default_rules: false` in your
-configuration, or disable specific categories using patterns like
-`default_rules: ["performance.*"]`.
 
 **Note**: Current default rules are mostly there to test the system. Suggestions are welcome on what should be included
 by default.

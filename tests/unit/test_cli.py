@@ -113,8 +113,8 @@ class TestRulesCommand:
                 assert "Active Rules:" in result.output
 
                 assert "Rule Evaluation Order (by priority):" in result.output
-                assert "performance.grep_suggestion" in result.output
-                assert "performance.find_suggestion" in result.output
+                assert "security.git_access" in result.output
+                assert "security.git_commands" in result.output
                 assert "Type: pre_use_bash" in result.output
                 assert "Priority: 30" in result.output
 
