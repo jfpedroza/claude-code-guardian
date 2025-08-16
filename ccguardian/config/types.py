@@ -3,9 +3,9 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
 
 from ..rules import Rule
+from .models import ConfigFile
 
 
 class SourceType(Enum):
@@ -41,7 +41,7 @@ class RawConfiguration:
     """Raw configuration data loaded from YAML before processing."""
 
     source: ConfigurationSource
-    data: dict[str, Any]
+    data: ConfigFile
 
 
 @dataclass
@@ -49,8 +49,7 @@ class Configuration:
     """Final processed configuration with merged rules."""
 
     sources: list[ConfigurationSource] = field(default_factory=list)
-    default_rules_enabled: bool = True
-    default_rules_patterns: list[str] | None = None
+    default_rules: bool | list[str] = True
     rules: list[Rule] = field(default_factory=list)
 
     @property

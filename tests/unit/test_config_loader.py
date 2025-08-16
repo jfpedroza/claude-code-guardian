@@ -117,7 +117,15 @@ class TestConfigurationLoader:
 
     def test_load_yaml_file_success(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
-            yaml.dump({"test": "data", "number": 42}, f)
+            yaml.dump(
+                {
+                    "default_rules": True,
+                    "rules": {
+                        "test.rule": {"type": "pre_use_bash", "pattern": "test", "enabled": True}
+                    },
+                },
+                f,
+            )
             temp_path = Path(f.name)
 
         try:
@@ -127,7 +135,10 @@ class TestConfigurationLoader:
 
             assert result is not None
             assert result.source == source
-            assert result.data == {"test": "data", "number": 42}
+            # result.data is now a ConfigFile object
+            assert result.data.default_rules is True
+            assert len(result.data.rules) == 1
+            assert "test.rule" in result.data.rules
         finally:
             temp_path.unlink()
 
@@ -180,6 +191,78 @@ class TestConfigurationLoader:
         finally:
             temp_path.unlink()
 
+    def test_load_yaml_file_invalid_rule_type(self):
+        """Test Pydantic validation error for invalid rule type."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            yaml.dump(
+                {
+                    "rules": {
+                        "test.rule": {
+                            "type": "invalid_type",  # Invalid rule type
+                            "pattern": "test",
+                        }
+                    }
+                },
+                f,
+            )
+            temp_path = Path(f.name)
+
+        try:
+            source = ConfigurationSource(source_type=SourceType.USER, path=temp_path, exists=True)
+
+            with pytest.raises(ConfigValidationError, match="Configuration validation failed"):
+                self.loader.load_yaml_file(source)
+        finally:
+            temp_path.unlink()
+
+    def test_load_yaml_file_missing_required_field(self):
+        """Test Pydantic validation error for missing required fields."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            yaml.dump(
+                {
+                    "rules": {
+                        "test.rule": {
+                            "type": "pre_use_bash"
+                            # Missing pattern or commands
+                        }
+                    }
+                },
+                f,
+            )
+            temp_path = Path(f.name)
+
+        try:
+            source = ConfigurationSource(source_type=SourceType.USER, path=temp_path, exists=True)
+
+            with pytest.raises(ConfigValidationError, match="Configuration validation failed"):
+                self.loader.load_yaml_file(source)
+        finally:
+            temp_path.unlink()
+
+    def test_load_yaml_file_invalid_regex_pattern(self):
+        """Test Pydantic validation error for invalid regex pattern."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
+            yaml.dump(
+                {
+                    "rules": {
+                        "test.rule": {
+                            "type": "pre_use_bash",
+                            "pattern": "[invalid",  # Invalid regex
+                        }
+                    }
+                },
+                f,
+            )
+            temp_path = Path(f.name)
+
+        try:
+            source = ConfigurationSource(source_type=SourceType.USER, path=temp_path, exists=True)
+
+            with pytest.raises(ConfigValidationError, match="Configuration validation failed"):
+                self.loader.load_yaml_file(source)
+        finally:
+            temp_path.unlink()
+
     def test_load_all_configurations(self):
         with patch.object(self.loader, "discover_all_sources") as mock_discover:
             with patch.object(self.loader, "load_yaml_file") as mock_load:
@@ -191,10 +274,13 @@ class TestConfigurationLoader:
                 ]
                 mock_discover.return_value = sources
 
-                # Mock loading - return configs with data for existing files, None for non-existing
+                # Mock loading - return configs with ConfigFile data for existing files, None for non-existing
                 def mock_load_side_effect(source):
                     if source.exists:
-                        return Mock(source=source, data={"test": source.source_type.value})
+                        from ccguardian.config.models import ConfigFile
+
+                        config_file = ConfigFile(default_rules=True, rules={})
+                        return Mock(source=source, data=config_file)
                     else:
                         return None
 

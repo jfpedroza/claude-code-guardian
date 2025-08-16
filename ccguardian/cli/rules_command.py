@@ -98,14 +98,13 @@ def format_rules_output(config_manager: ConfigurationManager) -> str:
     lines.append("Merged Configuration:")
     lines.append("=" * 20)
 
-    if config.default_rules_enabled:
-        if config.default_rules_patterns:
-            patterns_str = ", ".join(config.default_rules_patterns)
-            lines.append(f"Default Rules: enabled (patterns: {patterns_str})")
-        else:
-            lines.append("Default Rules: enabled")
-    else:
+    if config.default_rules is True:
+        lines.append("Default Rules: enabled")
+    elif config.default_rules is False:
         lines.append("Default Rules: disabled")
+    else:  # isinstance(config.default_rules, list)
+        patterns_str = ", ".join(config.default_rules)
+        lines.append(f"Default Rules: enabled (patterns: {patterns_str})")
 
     lines.append(f"Total Rules: {config.total_rules}")
     lines.append(
