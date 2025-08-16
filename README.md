@@ -15,10 +15,16 @@ The system uses Claude Code hooks to enforce the rules.
 
 ### 1. Install Claude Code Guardian
 
+Install from PyPI using `uvx`:
+
+```bash
+uvx claude-code-guardian
+```
+
 Install directly from GitHub using `uvx`:
 
 ```bash
-uvx --from git+https://github.com/jfpedroza/claude-code-guardian claude-code-guardian --help
+uvx --from git+https://github.com/jfpedroza/claude-code-guardian claude-code-guardian
 ```
 
 ### 2. Configure Claude Code Hooks
@@ -34,7 +40,7 @@ Add the following to your Claude Code settings (`.claude/settings.json` or `~/.c
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --from git+https://github.com/jfpedroza/claude-code-guardian claude-code-guardian hook"
+            "command": "uvx claude-code-guardian hook"
           }
         ]
       }
@@ -45,7 +51,7 @@ Add the following to your Claude Code settings (`.claude/settings.json` or `~/.c
         "hooks": [
           {
             "type": "command",
-            "command": "uvx --from git+https://github.com/jfpedroza/claude-code-guardian claude-code-guardian hook"
+            "command": "uvx claude-code-guardian hook"
           }
         ]
       }
@@ -58,10 +64,10 @@ Add the following to your Claude Code settings (`.claude/settings.json` or `~/.c
 
 ```bash
 # Should show help and available commands
-uvx --from git+https://github.com/jfpedroza/claude-code-guardian claude-code-guardian
+uvx claude-code-guardian
 
 # View current configuration and rules
-uvx --from git+https://github.com/jfpedroza/claude-code-guardian claude-code-guardian rules
+uvx claude-code-guardian rules
 ```
 
 ## Configuration
