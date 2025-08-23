@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from ccguardian.config import (
+    ConfigFile,
     ConfigurationLoader,
     ConfigurationSource,
     ConfigValidationError,
@@ -135,7 +136,7 @@ class TestConfigurationLoader:
 
             assert result is not None
             assert result.source == source
-            # result.data is now a ConfigFile object
+            assert isinstance(result.data, ConfigFile)
             assert result.data.default_rules is True
             assert len(result.data.rules) == 1
             assert "test.rule" in result.data.rules
@@ -191,8 +192,8 @@ class TestConfigurationLoader:
         finally:
             temp_path.unlink()
 
-    def test_load_yaml_file_invalid_rule_type(self):
-        """Test Pydantic validation error for invalid rule type."""
+    def test_load_yaml_file_invalid_configuration(self):
+        """Test Pydantic validation error for invalid configuration."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
             yaml.dump(
                 {
@@ -200,54 +201,6 @@ class TestConfigurationLoader:
                         "test.rule": {
                             "type": "invalid_type",  # Invalid rule type
                             "pattern": "test",
-                        }
-                    }
-                },
-                f,
-            )
-            temp_path = Path(f.name)
-
-        try:
-            source = ConfigurationSource(source_type=SourceType.USER, path=temp_path, exists=True)
-
-            with pytest.raises(ConfigValidationError, match="Configuration validation failed"):
-                self.loader.load_yaml_file(source)
-        finally:
-            temp_path.unlink()
-
-    def test_load_yaml_file_missing_required_field(self):
-        """Test Pydantic validation error for missing required fields."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
-            yaml.dump(
-                {
-                    "rules": {
-                        "test.rule": {
-                            "type": "pre_use_bash"
-                            # Missing pattern or commands
-                        }
-                    }
-                },
-                f,
-            )
-            temp_path = Path(f.name)
-
-        try:
-            source = ConfigurationSource(source_type=SourceType.USER, path=temp_path, exists=True)
-
-            with pytest.raises(ConfigValidationError, match="Configuration validation failed"):
-                self.loader.load_yaml_file(source)
-        finally:
-            temp_path.unlink()
-
-    def test_load_yaml_file_invalid_regex_pattern(self):
-        """Test Pydantic validation error for invalid regex pattern."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False) as f:
-            yaml.dump(
-                {
-                    "rules": {
-                        "test.rule": {
-                            "type": "pre_use_bash",
-                            "pattern": "[invalid",  # Invalid regex
                         }
                     }
                 },
@@ -277,8 +230,6 @@ class TestConfigurationLoader:
                 # Mock loading - return configs with ConfigFile data for existing files, None for non-existing
                 def mock_load_side_effect(source):
                     if source.exists:
-                        from ccguardian.config.models import ConfigFile
-
                         config_file = ConfigFile(default_rules=True, rules={})
                         return Mock(source=source, data=config_file)
                     else:

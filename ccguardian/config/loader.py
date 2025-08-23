@@ -110,27 +110,22 @@ class ConfigurationLoader:
                 )
 
             # Validate configuration structure
-            try:
-                config_file = ConfigFile.model_validate(data)
-                logger.debug(
-                    f"Successfully loaded and validated configuration from: {source.path}"
-                )
-                return RawConfiguration(source=source, data=config_file)
-            except ValidationError as e:
-                # Convert Pydantic validation errors to ConfigValidationError with context
-                error_details = []
-                for error in e.errors():
-                    location = (
-                        " -> ".join(str(x) for x in error["loc"]) if error["loc"] else "root"
-                    )
-                    error_details.append(f"{location}: {error['msg']}")
+            config_file = ConfigFile.model_validate(data)
+            logger.debug(f"Successfully loaded and validated configuration from: {source.path}")
+            return RawConfiguration(source=source, data=config_file)
 
-                error_message = "Configuration validation failed:\n" + "\n".join(error_details)
-                raise ConfigValidationError(
-                    error_message,
-                    source_path=str(source.path),
-                ) from e
+        except ValidationError as e:
+            # Convert Pydantic validation errors to ConfigValidationError with context
+            error_details = []
+            for error in e.errors():
+                location = " -> ".join(str(x) for x in error["loc"]) if error["loc"] else "root"
+                error_details.append(f"{location}: {error['msg']}")
 
+            error_message = "Configuration validation failed:\n" + "\n".join(error_details)
+            raise ConfigValidationError(
+                error_message,
+                source_path=str(source.path),
+            ) from e
         except ConfigValidationError:
             # Re-raise ConfigValidationError as-is to avoid double-wrapping
             raise
