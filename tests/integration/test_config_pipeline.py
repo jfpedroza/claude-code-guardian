@@ -18,7 +18,7 @@ from ccguardian.config import (
     RawConfiguration,
     SourceType,
 )
-from ccguardian.rules import Action, PreUseBashRule
+from ccguardian.rules import Action, PathAccessRule, PreUseBashRule, Scope
 
 
 def _patch_env_single(config_dir, project_dir):
@@ -162,6 +162,51 @@ class TestConfigurationPipeline:
                     merged_config = self.merger.merge_configurations(raw_configs)
                     assert merged_config.default_rules == ["performance.*"]
                     assert len(merged_config.sources) == 4
+                    assert len(merged_config.rules) == 5
+
+                    # Find specific rules and validate their properties
+                    rule_map = {rule.id: rule for rule in merged_config.rules}
+
+                    # Validate security.dangerous_command rule (overridden in shared config)
+                    dangerous_rule = rule_map["security.dangerous_command"]
+                    assert isinstance(dangerous_rule, PreUseBashRule)
+                    assert dangerous_rule.action == Action.WARN  # Overridden from deny to warn
+                    assert dangerous_rule.message == "Dangerous command - proceed with caution"
+                    assert dangerous_rule.priority == 100  # From user config
+                    assert dangerous_rule.enabled is True
+                    assert len(dangerous_rule.commands) == 1
+                    assert dangerous_rule.commands[0].pattern == "rm -rf|sudo rm"
+
+                    # Validate project.specific_rule (PathAccessRule)
+                    env_rule = rule_map["project.specific_rule"]
+                    assert isinstance(env_rule, PathAccessRule)
+                    assert env_rule.action == Action.DENY
+                    assert env_rule.scope == Scope.READ_WRITE
+                    assert env_rule.message == "Access to environment files blocked"
+                    assert env_rule.priority == 80
+                    assert env_rule.enabled is True
+                    assert len(env_rule.paths) == 1
+                    assert env_rule.paths[0].pattern == "**/.env*"
+
+                    # Validate local.custom_rule (local override)
+                    local_rule = rule_map["local.custom_rule"]
+                    assert isinstance(local_rule, PreUseBashRule)
+                    assert local_rule.action == Action.DENY
+                    assert local_rule.message == "Internal API calls blocked in this project"
+                    assert local_rule.priority == 90
+                    assert local_rule.enabled is True
+                    assert len(local_rule.commands) == 1
+                    assert local_rule.commands[0].pattern == "curl.*internal"
+
+                    # Validate performance.find_suggestion (disabled locally)
+                    find_rule = rule_map["performance.find_suggestion"]
+                    assert isinstance(find_rule, PreUseBashRule)
+                    assert find_rule.enabled is False  # Disabled in local config
+                    assert find_rule.priority == 50  # From default config
+
+                    # Verify rules are sorted by priority (highest first)
+                    priorities = [rule.priority for rule in merged_config.rules]
+                    assert priorities == sorted(priorities, reverse=True)
 
     def test_pipeline_with_no_project_configs(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -365,6 +410,26 @@ rules:
     message: "User level"
     priority: 50
     enabled: true
+  hierarchy.path_test:
+    type: path_access
+    pattern: "*.log"
+    scope: read
+    action: allow
+    message: "User level path access"
+    priority: 60
+    enabled: true
+  hierarchy.commands_test:
+    type: pre_use_bash
+    action: ask
+    priority: 70
+    enabled: true
+    commands:
+      - pattern: "git commit"
+        action: allow
+        message: "Git commit allowed"
+      - pattern: "git push.*--force"
+        action: ask
+        message: "Force push confirmation"
 """)
                 guardian_dir = Path(temp_dir) / ".claude" / "guardian"
                 guardian_dir.mkdir(parents=True)
@@ -375,6 +440,9 @@ rules:
   hierarchy.test:
     action: ask
     message: "Shared level"
+  hierarchy.path_test:
+    scope: write
+    message: "Shared level path access"
 """)
 
                 local_config = guardian_dir / "config.local.yml"
@@ -383,11 +451,49 @@ rules:
   hierarchy.test:
     action: deny
     message: "Local level - highest priority"
+  hierarchy.path_test:
+    action: deny
+    message: "Local level - path blocked"
+  hierarchy.commands_test:
+    action: deny
+    message: "Local level - commands blocked"
 """)
 
                 manager = ConfigurationManager()
                 config = manager.load_configuration()
-                test_rule = next(rule for rule in config.rules if rule.id == "hierarchy.test")
-                assert test_rule.action == Action.DENY
-                assert test_rule.message == "Local level - highest priority"
-                assert test_rule.priority == 50
+
+                rule_map = {rule.id: rule for rule in config.rules}
+
+                # Test hierarchy.test (PreUseBashRule with pattern)
+                test_rule = rule_map["hierarchy.test"]
+                assert isinstance(test_rule, PreUseBashRule)
+                assert test_rule.action == Action.DENY  # Local override
+                assert test_rule.message == "Local level - highest priority"  # Local override
+                assert test_rule.priority == 50  # From user config (preserved)
+                assert test_rule.enabled is True  # From user config (preserved)
+                assert len(test_rule.commands) == 1
+                assert test_rule.commands[0].pattern == "test"  # From user config (preserved)
+
+                # Test hierarchy.path_test (PathAccessRule)
+                path_rule = rule_map["hierarchy.path_test"]
+                assert isinstance(path_rule, PathAccessRule)
+                assert path_rule.action == Action.DENY  # Local override
+                assert path_rule.message == "Local level - path blocked"  # Local override
+                assert path_rule.scope == Scope.WRITE  # Shared override from READ
+                assert path_rule.priority == 60  # From user config (preserved)
+                assert path_rule.enabled is True  # From user config (preserved)
+                assert len(path_rule.paths) == 1
+                assert path_rule.paths[0].pattern == "*.log"  # From user config (preserved)
+
+                # Test hierarchy.commands_test (PreUseBashRule with commands list)
+                commands_rule = rule_map["hierarchy.commands_test"]
+                assert isinstance(commands_rule, PreUseBashRule)
+                assert commands_rule.action == Action.DENY  # Local override
+                assert commands_rule.message == "Local level - commands blocked"  # Local override
+                assert commands_rule.priority == 70  # From user config (preserved)
+                assert commands_rule.enabled is True  # From user config (preserved)
+                assert len(commands_rule.commands) == 2  # From user config (preserved)
+                assert commands_rule.commands[0].pattern == "git commit"
+                assert commands_rule.commands[0].action == Action.ALLOW
+                assert commands_rule.commands[1].pattern == "git push.*--force"
+                assert commands_rule.commands[1].action == Action.ASK
