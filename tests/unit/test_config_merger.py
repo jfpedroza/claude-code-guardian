@@ -148,13 +148,13 @@ class TestConfigurationMerger:
         )
         config1 = RawConfiguration(source=source1, data=config_data1)
 
-        # Second config overrides
+        # Second config provides partial overrides (no type field = partial merge)
         source2 = ConfigurationSource(SourceType.LOCAL, Path("/local.yml"), True)
         config_data2 = ConfigFile.model_validate(
             {
                 "rules": {
                     "test.rule": {
-                        "type": "pre_use_bash",  # Required for Pydantic validation
+                        # No type field = partial merge
                         "pattern": "overridden",
                         "action": "deny",
                         "message": "Blocked by local config",
@@ -173,7 +173,7 @@ class TestConfigurationMerger:
         assert rule.type == "pre_use_bash"  # From first config
         assert rule.commands[0].pattern == "overridden"  # Overridden (converted to commands)
         assert rule.action.value == "deny"  # Overridden (enum value)
-        assert rule.priority == 10  # From first config
+        assert rule.priority == 10  # From first config (preserved during merge)
         assert rule.message == "Blocked by local config"  # Added
 
     def test_merge_rules_type_protection(self):

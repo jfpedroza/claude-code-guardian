@@ -3,7 +3,6 @@
 import pytest
 from pydantic import ValidationError
 
-from ccguardian.config import validate_rule_config
 from ccguardian.config.models import (
     CommandPatternModel,
     ConfigFile,
@@ -262,6 +261,75 @@ class TestPreUseBashRuleConfig:
         assert rule.action is None
         assert rule.message is None
 
+    def test_pre_use_bash_rule_merge_pattern(self):
+        """Test merging a pattern into an existing PreUseBashRule."""
+        base_rule = PreUseBashRuleConfig(
+            type="pre_use_bash", pattern="git push", enabled=True, priority=100
+        )
+
+        partial_config = {"pattern": "git pull", "action": "deny"}
+
+        result = base_rule.merge(partial_config)
+
+        assert isinstance(result, PreUseBashRuleConfig)
+        assert result.enabled is True  # Inherited from base
+        assert result.priority == 100  # Inherited from base
+        assert result.action == Action.DENY  # From partial
+        assert len(result.commands) == 1
+        assert result.commands[0].pattern == "git pull"  # Pattern converted to commands
+        assert result.pattern is None  # Pattern cleared after conversion
+
+    def test_pre_use_bash_rule_merge_commands(self):
+        """Test merging commands into an existing PreUseBashRule."""
+        base_rule = PreUseBashRuleConfig(type="pre_use_bash", pattern="git push", priority=50)
+
+        partial_config = {
+            "commands": [
+                {"pattern": "git clone", "action": "allow"},
+                {"pattern": "git pull", "action": "ask"},
+            ],
+            "enabled": False,
+        }
+
+        result = base_rule.merge(partial_config)
+
+        assert isinstance(result, PreUseBashRuleConfig)
+        assert result.priority == 50  # Inherited from base
+        assert result.enabled is False  # From partial
+        assert len(result.commands) == 2
+        assert result.commands[0].pattern == "git clone"
+        assert result.commands[0].action == Action.ALLOW
+        assert result.commands[1].pattern == "git pull"
+        assert result.commands[1].action == Action.ASK
+        assert result.pattern is None  # Pattern cleared after commands override
+
+    def test_merge_invalid_action(self):
+        """Test that merge validates action values."""
+        base_rule = PreUseBashRuleConfig(type="pre_use_bash", pattern="test")
+
+        partial_config = {"action": "invalid_action"}
+
+        with pytest.raises(ValueError, match="Invalid action value"):
+            base_rule.merge(partial_config)
+
+    def test_merge_invalid_priority(self):
+        """Test that merge validates priority values."""
+        base_rule = PreUseBashRuleConfig(type="pre_use_bash", pattern="test")
+
+        partial_config = {"priority": -1}
+
+        with pytest.raises(ValueError, match="Priority must be a non-negative integer"):
+            base_rule.merge(partial_config)
+
+    def test_merge_invalid_commands_list(self):
+        """Test that merge validates commands list structure."""
+        base_rule = PreUseBashRuleConfig(type="pre_use_bash", pattern="test")
+
+        partial_config = {"commands": "not_a_list"}
+
+        with pytest.raises(ValueError, match="'commands' field must be a non-empty list"):
+            base_rule.merge(partial_config)
+
 
 class TestPathAccessRuleConfig:
     """Tests for PathAccessRuleConfig."""
@@ -386,6 +454,40 @@ class TestPathAccessRuleConfig:
         assert rule.action is None
         assert rule.message is None
         assert rule.scope is None
+
+    def test_path_access_rule_merge_pattern(self):
+        """Test merging a pattern into an existing PathAccessRule."""
+        base_rule = PathAccessRuleConfig(
+            type="path_access", pattern="*.txt", scope=Scope.READ, priority=75
+        )
+
+        partial_config = {"pattern": "*.env", "action": "deny"}
+
+        result = base_rule.merge(partial_config)
+
+        assert isinstance(result, PathAccessRuleConfig)
+        assert result.priority == 75  # Inherited from base
+        assert result.scope == Scope.READ  # Inherited from base
+        assert result.action == Action.DENY  # From partial
+        assert len(result.paths) == 1
+        assert result.paths[0].pattern == "*.env"  # Pattern converted to paths
+        assert result.pattern is None  # Pattern cleared after conversion
+
+    def test_path_access_rule_merge_scope(self):
+        """Test merging scope and other fields into PathAccessRule."""
+        base_rule = PathAccessRuleConfig(type="path_access", pattern="*.log", priority=25)
+
+        partial_config = {"scope": "write", "message": "Log files are protected", "enabled": True}
+
+        result = base_rule.merge(partial_config)
+
+        assert isinstance(result, PathAccessRuleConfig)
+        assert result.priority == 25  # Inherited from base
+        assert result.scope == Scope.WRITE  # From partial
+        assert result.message == "Log files are protected"  # From partial
+        assert result.enabled is True  # From partial
+        assert len(result.paths) == 1
+        assert result.paths[0].pattern == "*.log"  # Base pattern preserved
 
 
 class TestConfigFile:
@@ -572,57 +674,3 @@ class TestConfigFile:
                     "rules": "not a dictionary"  # Invalid rules section
                 }
             )
-
-
-class TestValidateRuleConfig:
-    def test_validate_pre_use_bash_rule(self):
-        rule_data = {
-            "type": "pre_use_bash",
-            "commands": [{"pattern": "git push"}],
-            "action": "deny",
-            "enabled": True,
-            "priority": 100,
-        }
-
-        result = validate_rule_config(rule_data, "test.rule")
-
-        assert isinstance(result, PreUseBashRuleConfig)
-        assert result.type == "pre_use_bash"
-        assert result.action == Action.DENY
-        assert result.enabled is True
-        assert result.priority == 100
-        assert len(result.commands) == 1
-
-    def test_validate_path_access_rule(self):
-        rule_data = {
-            "type": "path_access",
-            "paths": [{"pattern": "*.env", "scope": "read"}],
-            "action": "deny",
-            "scope": "write",
-        }
-
-        result = validate_rule_config(rule_data, "test.rule")
-
-        assert isinstance(result, PathAccessRuleConfig)
-        assert result.type == "path_access"
-        assert result.action == Action.DENY
-        assert result.scope == Scope.WRITE
-        assert len(result.paths) == 1
-
-    def test_validate_rule_config_missing_type(self):
-        rule_data = {"commands": [{"pattern": "test"}]}
-
-        with pytest.raises(ValueError, match="missing required 'type' field"):
-            validate_rule_config(rule_data, "test.rule")
-
-    def test_validate_rule_config_unknown_type(self):
-        rule_data = {"type": "unknown_type", "commands": [{"pattern": "test"}]}
-
-        with pytest.raises(ValueError, match="unknown type 'unknown_type'"):
-            validate_rule_config(rule_data, "test.rule")
-
-    def test_validate_rule_config_invalid_data(self):
-        rule_data = {"type": "pre_use_bash", "commands": "invalid"}  # Should be list
-
-        with pytest.raises(ValueError, match="validation failed"):
-            validate_rule_config(rule_data, "test.rule")

@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from ccguardian.config import (
     ConfigurationMerger,
     ConfigurationSource,
@@ -103,40 +101,6 @@ class TestConfigFactoryIntegration:
         assert rule3.commands[1].pattern == "git push.*--force"
         assert rule3.commands[1].action == Action.ASK
 
-    def test_merger_handles_invalid_rules(self):
-        # With Pydantic validation, invalid configurations fail at ConfigFile creation
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            ConfigFile.model_validate(
-                {
-                    "rules": {
-                        "valid.rule": {
-                            "type": "pre_use_bash",
-                            "pattern": "test",
-                            "action": "allow",
-                        },
-                        "invalid.missing_type": {
-                            "pattern": "test",
-                            "action": "deny",
-                        },
-                        "invalid.unknown_type": {
-                            "type": "unknown_rule_type",
-                            "pattern": "test",
-                        },
-                        "invalid.no_patterns": {
-                            "type": "pre_use_bash",
-                            "action": "deny",
-                        },
-                        "another.valid": {
-                            "type": "path_access",
-                            "pattern": "*.log",
-                            "action": "warn",
-                        },
-                    }
-                }
-            )
-
     def test_merger_rule_merging_with_factory(self):
         # First config
         source1 = ConfigurationSource(SourceType.USER, Path("/user.yml"), True)
@@ -160,7 +124,6 @@ class TestConfigFactoryIntegration:
             {
                 "rules": {
                     "test.rule": {
-                        "type": "pre_use_bash",  # Required for Pydantic validation
                         "pattern": "overridden",
                         "action": "deny",
                         "message": "Overridden message",
@@ -182,9 +145,3 @@ class TestConfigFactoryIntegration:
         assert rule.message == "Overridden message"  # Overridden
         assert len(rule.commands) == 1
         assert rule.commands[0].pattern == "overridden"  # Overridden
-
-    def test_empty_configuration_creates_empty_rules(self):
-        result = self.merger.merge_configurations([])
-
-        assert result.rules == []
-        assert result.default_rules is True

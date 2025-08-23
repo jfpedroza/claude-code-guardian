@@ -1,6 +1,7 @@
 """Pydantic models for configuration validation."""
 
 import re
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Literal
 
@@ -107,7 +108,7 @@ class PathPatternModel(BaseModel):
         return v
 
 
-class RuleConfigBase(BaseModel):
+class RuleConfigBase(BaseModel, ABC):
     """Base class for all rule configurations."""
 
     type: str
@@ -123,6 +124,53 @@ class RuleConfigBase(BaseModel):
         if v is not None and v < 0:
             raise ValueError("Priority must be non-negative")
         return v
+
+    def _merge_common_fields(self, partial_config: dict[str, Any]) -> dict[str, Any]:
+        """
+        Process common fields from partial configuration.
+
+        Args:
+            partial_config: Dictionary with partial rule configuration
+
+        Returns:
+            Dictionary with validated common fields
+
+        Raises:
+            ValueError: If partial_config contains invalid values
+        """
+        update_fields = {}
+
+        for field in ["enabled", "priority", "action", "message"]:
+            if field in partial_config and partial_config[field] is not None:
+                value = partial_config[field]
+
+                if field == "action" and isinstance(value, str):
+                    try:
+                        value = Action(value.lower())
+                    except ValueError as e:
+                        raise ValueError(f"Invalid action value: {value}") from e
+
+                if field == "priority" and (not isinstance(value, int) or value < 0):
+                    raise ValueError(f"Priority must be a non-negative integer, got {value}")
+
+                update_fields[field] = value
+
+        return update_fields
+
+    @abstractmethod
+    def merge(self, partial_config: dict[str, Any]) -> "RuleConfigBase":
+        """
+        Merge partial configuration into this instance.
+
+        Args:
+            partial_config: Dictionary with partial rule configuration
+
+        Returns:
+            New instance with merged configuration
+
+        Raises:
+            ValueError: If partial_config contains invalid values
+        """
 
 
 class PreUseBashRuleConfig(RuleConfigBase):
@@ -148,18 +196,45 @@ class PreUseBashRuleConfig(RuleConfigBase):
 
         # Convert single pattern to commands list for internal consistency
         if has_pattern and self.pattern:
-            # Validate the pattern using the same logic as CommandPatternModel
             _validate_regex_pattern(self.pattern)
 
-            # Convert to commands list
             self.commands = [CommandPatternModel(pattern=self.pattern, action=None, message=None)]
             self.pattern = None  # Clear the pattern field
 
-        # Validate commands list is not empty
         if self.commands is not None and len(self.commands) == 0:
             raise ValueError("'commands' field cannot be empty")
 
         return self
+
+    def merge(self, partial_config: dict[str, Any]) -> "PreUseBashRuleConfig":
+        """Handle PreUseBashRule-specific merging logic."""
+        update_fields = self._merge_common_fields(partial_config)
+
+        # Handle pattern/commands mutual exclusivity
+        if "pattern" in partial_config and partial_config["pattern"] is not None:
+            # Convert pattern to commands format and replace existing commands
+            pattern = partial_config["pattern"]
+            _validate_regex_pattern(pattern)
+            update_fields["commands"] = [
+                CommandPatternModel(pattern=pattern, action=None, message=None)
+            ]
+
+        elif "commands" in partial_config and partial_config["commands"] is not None:
+            commands_data = partial_config["commands"]
+            if not isinstance(commands_data, list) or len(commands_data) == 0:
+                raise ValueError("'commands' field must be a non-empty list")
+
+            # Validate and convert to CommandPatternModel instances
+            try:
+                commands = [
+                    CommandPatternModel.model_validate(cmd_data) for cmd_data in commands_data
+                ]
+            except Exception as e:
+                raise ValueError(f"Invalid command configuration: {e}") from e
+
+            update_fields["commands"] = commands
+
+        return self.model_copy(update=update_fields)
 
 
 class PathAccessRuleConfig(RuleConfigBase):
@@ -186,20 +261,54 @@ class PathAccessRuleConfig(RuleConfigBase):
 
         # Convert single pattern to paths list for internal consistency
         if has_pattern and self.pattern:
-            # Validate the pattern using the same logic as PathPatternModel
             _validate_glob_pattern(self.pattern)
 
-            # Convert to paths list
             self.paths = [
                 PathPatternModel(pattern=self.pattern, scope=None, action=None, message=None)
             ]
             self.pattern = None  # Clear the pattern field
 
-        # Validate paths list is not empty
         if self.paths is not None and len(self.paths) == 0:
             raise ValueError("'paths' field cannot be empty")
 
         return self
+
+    def merge(self, partial_config: dict[str, Any]) -> "PathAccessRuleConfig":
+        """Handle PathAccessRule-specific merging logic."""
+        update_fields = self._merge_common_fields(partial_config)
+
+        if "scope" in partial_config and partial_config["scope"] is not None:
+            scope = partial_config["scope"]
+            if isinstance(scope, str):
+                try:
+                    scope = Scope(scope.lower())
+                except ValueError as e:
+                    raise ValueError(f"Invalid scope value: {scope}") from e
+            update_fields["scope"] = scope
+
+        # Handle pattern/paths mutual exclusivity
+        if "pattern" in partial_config and partial_config["pattern"] is not None:
+            # Convert pattern to paths format and replace existing paths
+            pattern = partial_config["pattern"]
+            _validate_glob_pattern(pattern)
+            update_fields["paths"] = [
+                PathPatternModel(pattern=pattern, scope=None, action=None, message=None)
+            ]
+
+        elif "paths" in partial_config and partial_config["paths"] is not None:
+            paths_data = partial_config["paths"]
+            if not isinstance(paths_data, list) or len(paths_data) == 0:
+                raise ValueError("'paths' field must be a non-empty list")
+
+            # Validate and convert to PathPatternModel instances
+            try:
+                paths = [PathPatternModel.model_validate(path_data) for path_data in paths_data]
+            except Exception as e:
+                raise ValueError(f"Invalid path configuration: {e}") from e
+
+            update_fields["paths"] = paths
+
+        return self.model_copy(update=update_fields)
 
 
 # For flexibility in partial configurations, we'll use a custom validator
@@ -280,8 +389,6 @@ class ConfigFile(BaseModel):
                     raise ValueError(f"default_rules list item at index {i} must be a string")
             return v
 
-        raise ValueError("default_rules must be a boolean, list of strings, or None")
-
     @field_validator("rules")
     @classmethod
     def validate_rules_dict(cls, v: dict[str, Any]) -> dict[str, Any]:
@@ -290,34 +397,3 @@ class ConfigFile(BaseModel):
             if not isinstance(key, str) or not key.strip():
                 raise ValueError(f"Rule ID '{key}' must be a non-empty string")
         return v
-
-
-def validate_rule_config(rule_data: dict[str, Any], rule_id: str) -> RuleConfigBase:
-    """
-    Validate and convert a rule configuration dictionary to a RuleConfigBase instance.
-
-    Args:
-        rule_data: Dictionary containing rule configuration
-        rule_id: Rule identifier for error reporting
-
-    Returns:
-        Validated RuleConfigBase instance
-
-    Raises:
-        ValueError: If rule validation fails
-    """
-    rule_type = rule_data.get("type")
-    if not rule_type:
-        raise ValueError(f"Rule '{rule_id}' is missing required 'type' field")
-
-    if rule_type not in RULE_TYPE_MODELS:
-        valid_types = ", ".join(RULE_TYPE_MODELS.keys())
-        raise ValueError(
-            f"Rule '{rule_id}' has unknown type '{rule_type}'. Valid types: {valid_types}"
-        )
-
-    model_class = RULE_TYPE_MODELS[rule_type]
-    try:
-        return model_class.model_validate(rule_data)
-    except Exception as e:
-        raise ValueError(f"Rule '{rule_id}' validation failed: {e}") from e

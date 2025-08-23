@@ -5,7 +5,7 @@ from .factory import RuleFactory
 from .loader import ConfigurationLoader
 from .manager import ConfigurationManager
 from .merger import ConfigurationMerger
-from .models import ConfigFile, PathAccessRuleConfig, PreUseBashRuleConfig, validate_rule_config
+from .models import ConfigFile, PathAccessRuleConfig, PreUseBashRuleConfig
 from .types import Configuration, ConfigurationSource, RawConfiguration, SourceType
 
 __all__ = [
@@ -21,5 +21,4 @@ __all__ = [
     "RawConfiguration",
     "RuleFactory",
     "SourceType",
-    "validate_rule_config",
 ]

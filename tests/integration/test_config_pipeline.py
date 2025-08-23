@@ -9,10 +9,13 @@ import pytest
 import yaml
 
 from ccguardian.config import (
+    ConfigFile,
     ConfigurationLoader,
     ConfigurationManager,
     ConfigurationMerger,
+    ConfigurationSource,
     ConfigValidationError,
+    RawConfiguration,
     SourceType,
 )
 from ccguardian.rules import Action, PreUseBashRule
@@ -137,13 +140,6 @@ class TestConfigurationPipeline:
                 env_patch1,
                 env_patch2,
             ):
-                from ccguardian.config import (
-                    ConfigurationSource,
-                    RawConfiguration,
-                    SourceType,
-                )
-                from ccguardian.config.models import ConfigFile
-
                 default_source = ConfigurationSource(
                     SourceType.DEFAULT, Path("/mock/default.yml"), True
                 )
@@ -152,7 +148,6 @@ class TestConfigurationPipeline:
 
                     def mock_load_side_effect(source):
                         if source.source_type == SourceType.DEFAULT:
-                            # Convert default_config to ConfigFile object
                             config_file = ConfigFile.model_validate(default_config)
                             return RawConfiguration(source=source, data=config_file)
                         return ConfigurationLoader.load_yaml_file(self.loader, source)
