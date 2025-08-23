@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from ..rules import Action, Scope
 
@@ -229,7 +229,7 @@ class PreUseBashRuleConfig(RuleConfigBase):
                 commands = [
                     CommandPatternModel.model_validate(cmd_data) for cmd_data in commands_data
                 ]
-            except Exception as e:
+            except ValidationError as e:
                 raise ValueError(f"Invalid command configuration: {e}") from e
 
             update_fields["commands"] = commands
@@ -303,7 +303,7 @@ class PathAccessRuleConfig(RuleConfigBase):
             # Validate and convert to PathPatternModel instances
             try:
                 paths = [PathPatternModel.model_validate(path_data) for path_data in paths_data]
-            except Exception as e:
+            except ValidationError as e:
                 raise ValueError(f"Invalid path configuration: {e}") from e
 
             update_fields["paths"] = paths
@@ -334,6 +334,9 @@ class ConfigFile(BaseModel):
         validated_rules = {}
 
         for rule_id, rule_config in v.items():
+            if not isinstance(rule_id, str) or not rule_id.strip():
+                raise ValueError(f"Rule ID '{rule_id}' must be a non-empty string")
+
             if isinstance(rule_config, dict):
                 # Raw dictionary - attempt validation if type is present
                 if "type" in rule_config:
@@ -388,12 +391,3 @@ class ConfigFile(BaseModel):
                 if not isinstance(item, str):
                     raise ValueError(f"default_rules list item at index {i} must be a string")
             return v
-
-    @field_validator("rules")
-    @classmethod
-    def validate_rules_dict(cls, v: dict[str, Any]) -> dict[str, Any]:
-        """Validate rules dictionary has string keys."""
-        for key in v.keys():
-            if not isinstance(key, str) or not key.strip():
-                raise ValueError(f"Rule ID '{key}' must be a non-empty string")
-        return v
