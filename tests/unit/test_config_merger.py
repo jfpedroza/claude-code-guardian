@@ -12,6 +12,7 @@ from ccguardian.config import (
     RawConfiguration,
     SourceType,
 )
+from ccguardian.rules import DEFAULT_PRIORITY, PathAccessRule, PreUseBashRule
 
 
 class TestConfigurationMerger:
@@ -48,40 +49,108 @@ class TestConfigurationMerger:
         assert result.sources[0] == source
         assert result.default_rules is False
 
+        assert len(result.rules) == 1
+        rule = result.rules[0]
+        assert isinstance(rule, PreUseBashRule)
+        assert rule.id == "test.rule"
+        assert rule.action.value == "deny"
+        assert rule.enabled is True
+
     def test_merge_multiple_configurations_hierarchy(self):
-        # Default config
+        """Test configuration merging with hierarchy, rule creation, and priority sorting."""
+        # Default config with low-priority rules
         default_source = ConfigurationSource(SourceType.DEFAULT, Path("/default.yml"), True)
         default_config_data = ConfigFile.model_validate(
             {
                 "default_rules": True,
                 "rules": {
-                    "default.rule": {
+                    "default.low": {
                         "type": "pre_use_bash",
-                        "pattern": "default",
+                        "pattern": "echo",
                         "action": "allow",
                         "priority": 10,
-                    }
+                    },
+                    "security.dangerous": {
+                        "type": "pre_use_bash",
+                        "commands": [{"pattern": "rm -rf"}],
+                        "action": "warn",
+                        "priority": 90,
+                    },
                 },
             }
         )
         default_config = RawConfiguration(source=default_source, data=default_config_data)
 
-        # User config overrides
+        # User config with mixed priorities and partial overrides
         user_source = ConfigurationSource(SourceType.USER, Path("/user.yml"), True)
         user_config_data = ConfigFile.model_validate(
             {
-                "default_rules": False,
+                "default_rules": ["security.*"],  # Only include security rules from defaults
                 "rules": {
-                    "user.rule": {"type": "path_access", "pattern": "*.env", "action": "deny"}
+                    "rule.a": {"type": "path_access", "pattern": "*.env", "priority": 100},
+                    "rule.c": {
+                        "type": "pre_use_bash",
+                        "commands": [{"pattern": "git"}],
+                        "priority": DEFAULT_PRIORITY,
+                    },
+                    # Partial override of default rule - upgrade priority and change action
+                    "security.dangerous": {
+                        "action": "deny",
+                        "priority": 100,
+                    },
                 },
             }
         )
         user_config = RawConfiguration(source=user_source, data=user_config_data)
 
-        result = self.merger.merge_configurations([default_config, user_config])
+        # Local config adds more rules
+        local_source = ConfigurationSource(SourceType.LOCAL, Path("./.config.yml"), True)
+        local_config_data = ConfigFile.model_validate(
+            {
+                "rules": {
+                    "rule.b": {
+                        "type": "pre_use_bash",
+                        "commands": [{"pattern": "cat"}],
+                        "priority": DEFAULT_PRIORITY,
+                    },
+                    "security.env_files": {
+                        "type": "path_access",
+                        "paths": [{"pattern": "**/.env*"}],
+                        "action": "deny",
+                        "priority": 80,
+                    },
+                }
+            }
+        )
+        local_config = RawConfiguration(source=local_source, data=local_config_data)
 
-        assert len(result.sources) == 2
-        assert result.default_rules is False  # User config overrides
+        result = self.merger.merge_configurations([default_config, user_config, local_config])
+
+        assert len(result.sources) == 3
+        assert result.default_rules == ["security.*"]  # From user config
+
+        assert len(result.rules) == 5
+
+        assert result.rules[0].id == "rule.a"
+        assert result.rules[0].priority == 100
+        assert isinstance(result.rules[0], PathAccessRule)
+
+        assert result.rules[1].id == "security.dangerous"
+        assert result.rules[1].priority == 100  # Upgraded from 90
+        assert result.rules[1].action.value == "deny"  # Changed from "warn"
+        assert isinstance(result.rules[1], PreUseBashRule)
+
+        assert result.rules[2].id == "security.env_files"
+        assert result.rules[2].priority == 80
+        assert isinstance(result.rules[2], PathAccessRule)
+
+        assert result.rules[3].id == "rule.b"
+        assert result.rules[3].priority == DEFAULT_PRIORITY
+        assert isinstance(result.rules[3], PreUseBashRule)
+
+        assert result.rules[4].id == "rule.c"
+        assert result.rules[4].priority == DEFAULT_PRIORITY
+        assert isinstance(result.rules[4], PreUseBashRule)
 
     def test_should_include_default_rule_disabled(self):
         assert not self.merger._should_include_default_rule("security.test", False)

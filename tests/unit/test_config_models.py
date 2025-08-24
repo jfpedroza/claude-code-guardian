@@ -10,7 +10,13 @@ from ccguardian.config.models import (
     PathPatternModel,
     PreUseBashRuleConfig,
 )
-from ccguardian.rules import Action, Scope
+from ccguardian.rules import (
+    DEFAULT_PRIORITY,
+    Action,
+    PathAccessRule,
+    PreUseBashRule,
+    Scope,
+)
 
 
 class TestCommandPatternModel:
@@ -330,6 +336,68 @@ class TestPreUseBashRuleConfig:
         with pytest.raises(ValueError, match="'commands' field must be a non-empty list"):
             base_rule.merge(partial_config)
 
+    def test_to_rule_conversion(self):
+        """Test converting PreUseBashRuleConfig to PreUseBashRule."""
+        config = PreUseBashRuleConfig.model_validate(
+            {
+                "type": "pre_use_bash",
+                "commands": [
+                    {
+                        "pattern": "git push$",
+                        "action": "allow",
+                        "message": "Standard git push allowed",
+                    },
+                    {
+                        "pattern": "git push.*--force",
+                        "action": "ask",
+                        "message": "Force push requires confirmation",
+                    },
+                    {"pattern": "git push origin"},  # No action/message overrides
+                ],
+                "action": "deny",
+                "message": "Git operation blocked",
+                "priority": 100,
+                "enabled": True,
+            }
+        )
+
+        rule = config.to_rule("git.operations")
+
+        assert isinstance(rule, PreUseBashRule)
+        assert rule.id == "git.operations"
+        assert rule.priority == 100
+        assert rule.action == Action.DENY
+        assert rule.message == "Git operation blocked"
+        assert len(rule.commands) == 3
+
+        assert rule.commands[0].pattern == "git push$"
+        assert rule.commands[0].action == Action.ALLOW
+        assert rule.commands[0].message == "Standard git push allowed"
+
+        assert rule.commands[1].pattern == "git push.*--force"
+        assert rule.commands[1].action == Action.ASK
+        assert rule.commands[1].message == "Force push requires confirmation"
+
+        assert rule.commands[2].pattern == "git push origin"
+        assert rule.commands[2].action is None  # Will use rule-level action
+        assert rule.commands[2].message is None  # Will use rule-level message
+
+    def test_to_rule_with_defaults(self):
+        """Test to_rule conversion with default values."""
+        config = PreUseBashRuleConfig.model_validate(
+            {"type": "pre_use_bash", "commands": [{"pattern": "test"}]}
+        )
+
+        rule = config.to_rule("minimal.rule")
+
+        assert isinstance(rule, PreUseBashRule)
+        assert rule.id == "minimal.rule"
+        assert rule.enabled is True  # Default
+        assert rule.priority == DEFAULT_PRIORITY  # Default
+        assert rule.action == Action.CONTINUE  # Default for PreUseBashRule
+        assert rule.message is None  # Default
+        assert len(rule.commands) == 1
+
 
 class TestPathAccessRuleConfig:
     """Tests for PathAccessRuleConfig."""
@@ -488,6 +556,57 @@ class TestPathAccessRuleConfig:
         assert result.enabled is True  # From partial
         assert len(result.paths) == 1
         assert result.paths[0].pattern == "*.log"  # Base pattern preserved
+
+    def test_to_rule_conversion(self):
+        """Test converting PathAccessRuleConfig to PathAccessRule."""
+        config = PathAccessRuleConfig.model_validate(
+            {
+                "type": "path_access",
+                "paths": [
+                    {
+                        "pattern": "**/.git/**",
+                        "scope": "write",
+                        "action": "warn",
+                        "message": "Direct .git manipulation detected",
+                    },
+                    {
+                        "pattern": "**/config/secrets/**",
+                        "scope": "read",
+                        "action": "deny",
+                        "message": "Access to secrets directory blocked",
+                    },
+                    {"pattern": "**/*.log"},  # No overrides
+                ],
+                "action": "allow",
+                "scope": "read_write",
+                "priority": 70,
+                "enabled": True,
+            }
+        )
+
+        rule = config.to_rule("security.sensitive_files")
+
+        assert isinstance(rule, PathAccessRule)
+        assert rule.id == "security.sensitive_files"
+        assert rule.priority == 70
+        assert rule.action == Action.ALLOW
+        assert rule.scope == Scope.READ_WRITE
+        assert len(rule.paths) == 3
+
+        assert rule.paths[0].pattern == "**/.git/**"
+        assert rule.paths[0].scope == Scope.WRITE
+        assert rule.paths[0].action == Action.WARN
+        assert rule.paths[0].message == "Direct .git manipulation detected"
+
+        assert rule.paths[1].pattern == "**/config/secrets/**"
+        assert rule.paths[1].scope == Scope.READ
+        assert rule.paths[1].action == Action.DENY
+        assert rule.paths[1].message == "Access to secrets directory blocked"
+
+        assert rule.paths[2].pattern == "**/*.log"
+        assert rule.paths[2].scope is None  # Will use rule-level scope
+        assert rule.paths[2].action is None  # Will use rule-level action
+        assert rule.paths[2].message is None  # Will use rule-level message
 
 
 class TestConfigFile:

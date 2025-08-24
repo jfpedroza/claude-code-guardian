@@ -1,7 +1,6 @@
 """Configuration loading and management for Claude Code Guardian."""
 
 from .exceptions import ConfigValidationError
-from .factory import RuleFactory
 from .loader import ConfigurationLoader
 from .manager import ConfigurationManager
 from .merger import ConfigurationMerger
@@ -19,6 +18,5 @@ __all__ = [
     "PathAccessRuleConfig",
     "PreUseBashRuleConfig",
     "RawConfiguration",
-    "RuleFactory",
     "SourceType",
 ]

@@ -4,7 +4,6 @@ import fnmatch
 import logging
 
 from .exceptions import ConfigValidationError
-from .factory import RuleFactory
 from .models import RuleConfigBase
 from .types import Configuration, RawConfiguration
 
@@ -13,10 +12,6 @@ logger = logging.getLogger(__name__)
 
 class ConfigurationMerger:
     """Merges multiple configuration sources into a single configuration."""
-
-    def __init__(self):
-        """Initialize the merger with a rule factory."""
-        self.rule_factory = RuleFactory()
 
     def merge_configurations(self, raw_configs: list[RawConfiguration]) -> Configuration:
         """
@@ -45,7 +40,13 @@ class ConfigurationMerger:
                 final_default_rules = raw_config.data.default_rules
 
         merged_rules_data = self._merge_rules_by_id(raw_configs, final_default_rules)
-        rules = self.rule_factory.create_rules_from_merged_data(merged_rules_data)
+
+        rules = [
+            rule_config.to_rule(rule_id) for rule_id, rule_config in merged_rules_data.items()
+        ]
+
+        # Sort by priority (higher first), then by rule ID for deterministic ordering
+        rules.sort(key=lambda r: (-r.priority, r.id))
 
         return Configuration(
             sources=sources,

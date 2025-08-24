@@ -22,11 +22,10 @@ The project follows a modular architecture:
   - `rules_command.py`: Rule management and display commands
 - **`ccguardian/config/`**: Configuration management system
   - `types.py`: Core data classes (Configuration, Rule, SourceType)
-  - `models.py`: Pydantic models for configuration validation and rule definitions
+  - `models.py`: Pydantic models for configuration validation, rule definitions, and rule object conversion
   - `manager.py`: Configuration loading and merging orchestration  
   - `loader.py`: YAML configuration file parsing with Pydantic validation
-  - `factory.py`: Rule object creation from validated Pydantic models
-  - `merger.py`: Multi-source configuration merging with rule-specific logic
+  - `merger.py`: Multi-source configuration merging, rule creation, and priority sorting
   - `default.yml`: Built-in default rules
 - **`ccguardian/rules.py`**: Rule definitions and validation logic
 

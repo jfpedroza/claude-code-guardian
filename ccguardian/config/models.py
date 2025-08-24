@@ -7,7 +7,15 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from ..rules import Action, Scope
+from ..rules import (
+    Action,
+    CommandPattern,
+    PathAccessRule,
+    PathPattern,
+    PreUseBashRule,
+    Rule,
+    Scope,
+)
 
 
 def _validate_regex_pattern(pattern: str) -> None:
@@ -172,6 +180,18 @@ class RuleConfigBase(BaseModel, ABC):
             ValueError: If partial_config contains invalid values
         """
 
+    @abstractmethod
+    def to_rule(self, rule_id: str) -> Rule:
+        """
+        Convert this rule configuration to a Rule instance.
+
+        Args:
+            rule_id: Unique identifier for the rule
+
+        Returns:
+            Rule object
+        """
+
 
 class PreUseBashRuleConfig(RuleConfigBase):
     """Configuration for bash command validation rules."""
@@ -235,6 +255,27 @@ class PreUseBashRuleConfig(RuleConfigBase):
             update_fields["commands"] = commands
 
         return self.model_copy(update=update_fields)
+
+    def to_rule(self, rule_id: str) -> PreUseBashRule:
+        """Convert this rule configuration to a PreUseBashRule instance."""
+        commands = []
+        for cmd_pattern in self.commands or []:
+            commands.append(
+                CommandPattern(
+                    pattern=cmd_pattern.pattern,
+                    action=cmd_pattern.action,
+                    message=cmd_pattern.message,
+                )
+            )
+
+        return PreUseBashRule(
+            id=rule_id,
+            commands=commands,
+            enabled=self.enabled if self.enabled is not None else True,
+            priority=self.priority,
+            action=self.action,
+            message=self.message,
+        )
 
 
 class PathAccessRuleConfig(RuleConfigBase):
@@ -309,6 +350,29 @@ class PathAccessRuleConfig(RuleConfigBase):
             update_fields["paths"] = paths
 
         return self.model_copy(update=update_fields)
+
+    def to_rule(self, rule_id: str) -> PathAccessRule:
+        """Convert this rule configuration to a PathAccessRule instance."""
+        paths = []
+        for path_pattern in self.paths or []:
+            paths.append(
+                PathPattern(
+                    pattern=path_pattern.pattern,
+                    scope=path_pattern.scope,
+                    action=path_pattern.action,
+                    message=path_pattern.message,
+                )
+            )
+
+        return PathAccessRule(
+            id=rule_id,
+            paths=paths,
+            enabled=self.enabled if self.enabled is not None else True,
+            priority=self.priority,
+            action=self.action,
+            message=self.message,
+            scope=self.scope,
+        )
 
 
 # For flexibility in partial configurations, we'll use a custom validator
