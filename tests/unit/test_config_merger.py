@@ -76,6 +76,12 @@ class TestConfigurationMerger:
                         "action": "warn",
                         "priority": 90,
                     },
+                    "debug.logging": {
+                        "type": "path_access",
+                        "pattern": "*.log",
+                        "action": "allow",
+                        "priority": 50,
+                    },
                 },
             }
         )
@@ -97,6 +103,11 @@ class TestConfigurationMerger:
                     "security.dangerous": {
                         "action": "deny",
                         "priority": 100,
+                    },
+                    # Re-enable a default rule that was disabled by pattern filtering
+                    "debug.logging": {
+                        "enabled": True,
+                        "priority": 70,
                     },
                 },
             }
@@ -129,7 +140,7 @@ class TestConfigurationMerger:
         assert len(result.sources) == 3
         assert result.default_rules == ["security.*"]  # From user config
 
-        assert len(result.rules) == 5
+        assert len(result.rules) == 7
 
         assert result.rules[0].id == "rule.a"
         assert result.rules[0].priority == 100
@@ -144,31 +155,41 @@ class TestConfigurationMerger:
         assert result.rules[2].priority == 80
         assert isinstance(result.rules[2], PathAccessRule)
 
-        assert result.rules[3].id == "rule.b"
-        assert result.rules[3].priority == DEFAULT_PRIORITY
-        assert isinstance(result.rules[3], PreUseBashRule)
+        assert result.rules[3].id == "debug.logging"
+        assert result.rules[3].priority == 70  # Upgraded from 50
+        assert result.rules[3].enabled is True  # Re-enabled despite pattern filtering
+        assert isinstance(result.rules[3], PathAccessRule)
 
-        assert result.rules[4].id == "rule.c"
+        assert result.rules[4].id == "rule.b"
         assert result.rules[4].priority == DEFAULT_PRIORITY
         assert isinstance(result.rules[4], PreUseBashRule)
 
-    def test_should_include_default_rule_disabled(self):
-        assert not self.merger._should_include_default_rule("security.test", False)
+        assert result.rules[5].id == "rule.c"
+        assert result.rules[5].priority == DEFAULT_PRIORITY
+        assert isinstance(result.rules[5], PreUseBashRule)
 
-    def test_should_include_default_rule_all_enabled(self):
-        assert self.merger._should_include_default_rule("security.test", True)
-        assert self.merger._should_include_default_rule("performance.test", True)
+        assert result.rules[6].id == "default.low"
+        assert result.rules[6].priority == 10
+        assert result.rules[6].enabled is False  # Disabled by pattern filtering
+        assert isinstance(result.rules[6], PreUseBashRule)
 
-    def test_should_include_default_rule_pattern_matching(self):
+    def test_should_enable_default_rule_disabled(self):
+        assert not self.merger._should_enable_default_rule("security.test", False)
+
+    def test_should_enable_default_rule_all_enabled(self):
+        assert self.merger._should_enable_default_rule("security.test", True)
+        assert self.merger._should_enable_default_rule("performance.test", True)
+
+    def test_should_enable_default_rule_pattern_matching(self):
         patterns = ["security.*", "performance.grep*"]
 
         # Should match
-        assert self.merger._should_include_default_rule("security.dangerous", patterns)
-        assert self.merger._should_include_default_rule("performance.grep_suggestion", patterns)
+        assert self.merger._should_enable_default_rule("security.dangerous", patterns)
+        assert self.merger._should_enable_default_rule("performance.grep_suggestion", patterns)
 
         # Should not match
-        assert not self.merger._should_include_default_rule("debug.logging", patterns)
-        assert not self.merger._should_include_default_rule("performance.find", patterns)
+        assert not self.merger._should_enable_default_rule("debug.logging", patterns)
+        assert not self.merger._should_enable_default_rule("performance.find", patterns)
 
     def test_merge_rules_by_id_simple(self):
         source = ConfigurationSource(SourceType.USER, Path("/user.yml"), True)
@@ -290,10 +311,16 @@ class TestConfigurationMerger:
         )
         default_config = RawConfiguration(source=default_source, data=config_data)
 
-        # Test with patterns filtering
+        # Test with patterns filtering - all rules should be included but with different enabled states
         result = self.merger._merge_rules_by_id([default_config], ["security.*", "performance.*"])
 
-        assert len(result) == 2
+        assert len(result) == 3  # All rules are included
         assert "security.dangerous" in result
         assert "performance.grep" in result
-        assert "debug.logging" not in result
+        assert "debug.logging" in result
+
+        # Rules matching patterns should be enabled
+        assert result["security.dangerous"].enabled is True
+        assert result["performance.grep"].enabled is True
+        # Rules not matching patterns should be disabled
+        assert result["debug.logging"].enabled is False

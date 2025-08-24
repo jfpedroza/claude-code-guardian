@@ -76,12 +76,6 @@ class ConfigurationMerger:
 
         for raw_config in raw_configs:
             for rule_id, rule_config in raw_config.data.rules.items():
-                if (
-                    raw_config.source.source_type.value == "default"
-                    and not self._should_include_default_rule(rule_id, default_rules_setting)
-                ):
-                    continue
-
                 if rule_id not in merged_rules:
                     # First occurrence - must be complete RuleConfigBase instance
                     if not isinstance(rule_config, RuleConfigBase):
@@ -90,6 +84,15 @@ class ConfigurationMerger:
                             rule_id=rule_id,
                             source_path=str(raw_config.source.path),
                         )
+
+                    # For default rules, set enabled based on default_rules_setting
+                    if raw_config.source.source_type.value == "default":
+                        should_enable = self._should_enable_default_rule(
+                            rule_id, default_rules_setting
+                        )
+                        if rule_config.enabled is None:
+                            rule_config.enabled = should_enable
+
                     merged_rules[rule_id] = rule_config
                 else:
                     # Subsequent occurrence - can be complete or partial
@@ -117,18 +120,18 @@ class ConfigurationMerger:
 
         return merged_rules
 
-    def _should_include_default_rule(
+    def _should_enable_default_rule(
         self, rule_id: str, default_rules_setting: bool | list[str]
     ) -> bool:
         """
-        Check if a default rule should be included based on filtering settings.
+        Check if a default rule should be enabled based on filtering settings.
 
         Args:
             rule_id: Rule identifier to check
             default_rules_setting: Default rules setting (True=all, False=none, list=patterns)
 
         Returns:
-            True if rule should be included
+            True if rule should be enabled
         """
         if default_rules_setting is False:
             return False
