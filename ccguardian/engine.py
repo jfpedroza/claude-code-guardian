@@ -64,34 +64,30 @@ class Engine:
 
         assert isinstance(self.context, PreToolUseContext)
 
-        rule_message = f"Rule {result.rule_id} matched with message: {result.message}"
+        log_message = f"Rule {result.rule_id} matched with message: {result.message}"
+        user_message = f"{result.message} (Rule: {result.rule_id})"
 
         match result.action:
             case Action.ALLOW:
-                reason = f"Action allowed. {rule_message}"
-                logger.info(reason)
-                self.context.output.allow(reason)
+                logger.info(f"Action allowed. {log_message}")
+                self.context.output.allow(f"Guardian: Action allowed. {user_message}")
                 exit_success()
             case Action.WARN:
-                reason = f"Warning. {rule_message}"
-                logger.warning(reason)
-                exit_non_block(reason)
+                logger.warning(f"Warning. {log_message}")
+                self.context.output.allow(system_message=f"Guardian: {user_message}")
+                exit_success()
             case Action.ASK:
-                reason = f"Asking the user. {rule_message}"
-                logger.info(reason)
-                self.context.output.ask(reason)
+                logger.info(f"Asking the user. {log_message}")
+                self.context.output.ask(f"Guardian: {user_message}")
                 exit_success()
             case Action.DENY:
-                reason = f"Action denied. {rule_message}"
-                logger.warning(reason)
-                self.context.output.deny(reason)
+                logger.warning(f"Action denied. {log_message}")
+                self.context.output.deny(f"Guardian: {user_message}")
                 exit_success()
             case Action.HALT:
-                reason = f"Halting. {rule_message}"
-                logger.error(reason)
-                self.context.output.halt(reason)
+                logger.error(f"Halting. {log_message}")
+                self.context.output.halt(f"Guardian: 🛑 Halting. {user_message}")
                 exit_success()
             case Action.CONTINUE:
-                reason = f"Continuing with CC's default permissions. {rule_message}"
-                logger.info(reason)
+                logger.info(f"Continuing with CC's default permissions. {log_message}")
                 exit_success()

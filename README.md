@@ -297,7 +297,7 @@ rule_name:
 ## Actions
 
 - **`allow`**: Permit operation silently
-- **`warn`**: Show warning, continue with Claude's default permission system
+- **`warn`**: Show warning but allow operation
 - **`ask`**: Require user confirmation
 - **`deny`**: Block operation completely
 - **`halt`**: Stop all processing

@@ -79,7 +79,10 @@ class TestHookCommandIntegration:
         )
 
         assert result.returncode == 0
-        assert "Action denied. Rule security.git_access matched" in result.stdout
+        assert (
+            "Guardian: Direct access to .git directory is restricted for security (Rule: security.git_access)"
+            in result.stdout
+        )
         assert result.stderr == ""
 
     def test_hook_command_via_subprocess_no_matching_rule(self):
@@ -154,10 +157,9 @@ rules:
                 env=env,
             )
 
-            assert result.returncode == 1
-            assert "Warning" in result.stderr
-            assert "Custom test rule triggered" in result.stderr
-            assert result.stdout == ""
+            assert result.returncode == 0
+            assert "Guardian: Custom test rule triggered" in result.stdout
+            assert result.stderr == ""
 
             # Test hook with command that doesn't match (should pass)
             hook_input["tool_input"]["command"] = "ls -la"

@@ -194,23 +194,22 @@ class TestEngineHandleResult:
 
         self.context.output.allow.assert_called_once()
         call_args = self.context.output.allow.call_args[0][0]
-        assert "Action allowed" in call_args
-        assert "Test message" in call_args
+        assert "Guardian: Action allowed. Test message" in call_args
         mock_exit_success.assert_called_once()
 
-    @patch("ccguardian.engine.exit_non_block")
-    def test_handle_result_warn(self, mock_exit_non_block):
+    @patch("ccguardian.engine.exit_success")
+    def test_handle_result_warn(self, mock_exit_success):
         result = RuleResult(rule_id="test.rule", action=Action.WARN, message="Test warning")
 
-        mock_exit_non_block.side_effect = SystemExit(0)
+        mock_exit_success.side_effect = SystemExit(0)
 
         with pytest.raises(SystemExit):
             self.engine.handle_result(result)
 
-        mock_exit_non_block.assert_called_once()
-        call_args = mock_exit_non_block.call_args[0][0]
-        assert "Warning" in call_args
-        assert "Test warning" in call_args
+        self.context.output.allow.assert_called_once()
+        call_args = self.context.output.allow.call_args[1]  # system_message is keyword arg
+        assert "Guardian: Test warning" in call_args["system_message"]
+        mock_exit_success.assert_called_once()
 
     @patch("ccguardian.engine.exit_success")
     def test_handle_result_ask(self, mock_exit_success):
@@ -223,8 +222,7 @@ class TestEngineHandleResult:
 
         self.context.output.ask.assert_called_once()
         call_args = self.context.output.ask.call_args[0][0]
-        assert "Asking the user" in call_args
-        assert "Ask user" in call_args
+        assert "Guardian: Ask user" in call_args
         mock_exit_success.assert_called_once()
 
     @patch("ccguardian.engine.exit_success")
@@ -238,8 +236,7 @@ class TestEngineHandleResult:
 
         self.context.output.deny.assert_called_once()
         call_args = self.context.output.deny.call_args[0][0]
-        assert "Action denied" in call_args
-        assert "Denied" in call_args
+        assert "Guardian: Denied" in call_args
         mock_exit_success.assert_called_once()
 
     @patch("ccguardian.engine.exit_success")
@@ -253,8 +250,7 @@ class TestEngineHandleResult:
 
         self.context.output.halt.assert_called_once()
         call_args = self.context.output.halt.call_args[0][0]
-        assert "Halting" in call_args
-        assert "Halt execution" in call_args
+        assert "Guardian: 🛑 Halting. Halt execution" in call_args
         mock_exit_success.assert_called_once()
 
     @patch("ccguardian.engine.exit_success")
