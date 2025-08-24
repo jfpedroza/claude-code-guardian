@@ -8,6 +8,7 @@ from cchooks import (
     PostToolUseContext,
     PreCompactContext,
     PreToolUseContext,
+    SessionEndContext,
     SessionStartContext,
     create_context,
     handle_context_error,
@@ -28,6 +29,8 @@ def _context_suffix(context: HookContext) -> str | None:
             return context.trigger
         case SessionStartContext():
             return context.source
+        case SessionEndContext():
+            return context.reason
 
 
 @click.command()
