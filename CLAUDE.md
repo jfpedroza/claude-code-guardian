@@ -22,10 +22,10 @@ The project follows a modular architecture:
   - `rules_command.py`: Rule management and display commands
 - **`ccguardian/config/`**: Configuration management system
   - `types.py`: Core data classes (Configuration, Rule, SourceType)
-  - `manager.py`: Configuration loading and merging orchestration
-  - `loader.py`: YAML configuration file parsing
-  - `factory.py`: Configuration source discovery and creation
-  - `merger.py`: Multi-source configuration merging logic
+  - `models.py`: Pydantic models for configuration validation, rule definitions, and rule object conversion
+  - `manager.py`: Configuration loading and merging orchestration  
+  - `loader.py`: YAML configuration file parsing with Pydantic validation
+  - `merger.py`: Multi-source configuration merging, rule creation, and priority sorting
   - `default.yml`: Built-in default rules
 - **`ccguardian/rules.py`**: Rule definitions and validation logic
 
@@ -69,6 +69,7 @@ uv run pytest --no-cov
 
 # Run specific test files
 uv run pytest tests/unit/test_cli.py
+uv run pytest tests/unit/test_config_models.py
 uv run pytest tests/unit/test_config_factory.py
 uv run pytest tests/integration/
 
@@ -109,23 +110,37 @@ scripts/format.sh
 - **Package Name**: `claude-code-guardian` (CLI command name)
 - **Python Package**: `ccguardian` (internal package name)
 - **Python Version**: `>=3.12`
-- **Dependencies**: `cchooks`, `click`, `PyYAML`
+- **Dependencies**: `cchooks`, `click`, `pydantic`, `PyYAML`
 - **Dev Dependencies**: `ruff`, `mypy`, `pytest`
 
 ### Configuration System
 
-The application supports a hierarchical configuration system with multiple sources:
+The application uses a modern hierarchical configuration system with Pydantic validation:
+
+#### Configuration Sources (in priority order)
 
 1. **Default rules**: Built-in rules from `ccguardian/config/default.yml`
 2. **User config**: `~/.config/claude-code-guardian/config.yml`
 3. **Shared config**: `/etc/claude-code-guardian/config.yml`
 4. **Local config**: `.claude-code-guardian.yml` in project root
 
-Configuration sources are merged with local taking highest priority. Each source can:
+#### Key Features
 
-- Enable/disable default rules
-- Define custom validation rules
-- Set rule priorities and patterns
+- **Pydantic Validation**: All configuration files are validated using Pydantic models for type safety and structure
+  validation
+- **Rule-Specific Merging**: Configuration merging uses rule-specific logic with support for both complete and partial
+  rule definitions
+- **Pattern Validation**: Regex patterns (for bash rules) and glob patterns (for path rules) are validated at load
+  time
+- **Flexible Default Rules**: Support for enabling all defaults (`default_rules: true`), disabling all
+  (`default_rules: false`), or pattern-based filtering (`default_rules: ["pattern.*"]`)
+
+#### Configuration Sources Capabilities
+
+- Enable/disable default rules with pattern-based filtering
+- Define custom validation rules with full type validation
+- Set rule priorities and patterns with validation
+- Support both complete rule definitions and partial overrides
 
 ### Test Coverage Requirements
 

@@ -96,11 +96,13 @@ class PreUseBashRule(Rule):
         id: str,
         commands: list[CommandPattern] | None = None,
         enabled: bool = True,
-        priority: int = DEFAULT_PRIORITY,
+        priority: int | None = None,
         action: Action | None = None,
         message: str | None = None,
     ):
-        super().__init__(id, enabled, priority, action or self.default_action, message)
+        super().__init__(
+            id, enabled, priority or DEFAULT_PRIORITY, action or self.default_action, message
+        )
         self.commands = commands or []
 
     def evaluate(self, context: HookContext) -> RuleResult | None:
