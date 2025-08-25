@@ -195,6 +195,7 @@ class TestRulesCommandIntegration:
         assert "Rule Evaluation Order" in result.stdout
         assert "Default Rules: enabled" in result.stdout
 
+        # Ensure all default rules are detected
         assert "security.git_access" in result.stdout
         assert "security.git_commands" in result.stdout
         assert "performance.grep_suggestion" in result.stdout
