@@ -209,9 +209,3 @@ class PathAccessRule(Rule):
         if pattern_scope == Scope.READ_WRITE:
             return True
         return pattern_scope == operation_scope
-
-
-RULE_TYPES: dict[str, type[Rule]] = {
-    "pre_use_bash": PreUseBashRule,
-    "path_access": PathAccessRule,
-}
